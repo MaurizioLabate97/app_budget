@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">App Budget</string>
+    <string name="title_activity_main">App Budget</string>
+    <string name="package_name">it.personal.appbudget</string>
+    <string name="custom_url_scheme">it.personal.appbudget</string>
+</resources>
