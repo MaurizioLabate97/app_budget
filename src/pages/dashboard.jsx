@@ -89,6 +89,7 @@ export default function Dashboard() {
         summary.rows.find((row) => row.type === "expense")?.sum_amount || 0;
 
       const categoryMap = {};
+
       catRes.items.forEach((category) => {
         categoryMap[category.id] = category;
       });
@@ -186,29 +187,30 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div className="flex w-full items-center justify-center py-20">
         <div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 p-4 pb-6 max-w-md mx-auto">
+    <div className="w-full min-w-0 max-w-md mx-auto space-y-5 px-3 sm:px-4 pt-2 pb-6">
       {/* Selettore del mese */}
-      <div className="flex items-center justify-between pt-2">
+      <div className="flex items-center justify-between gap-2">
         <button
           type="button"
           onClick={() => changeMonth(-1)}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
+          className="w-10 h-10 shrink-0 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
           aria-label="Previous month"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
 
-        <div className="text-center">
-          <p className="text-lg font-semibold">
+        <div className="text-center min-w-0">
+          <p className="text-lg font-semibold truncate">
             {monthName} {year}
           </p>
+
           {isCurrentMonth && (
             <p className="text-xs text-muted-foreground">Current month</p>
           )}
@@ -217,7 +219,7 @@ export default function Dashboard() {
         <button
           type="button"
           onClick={() => changeMonth(1)}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
+          className="w-10 h-10 shrink-0 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
           aria-label="Next month"
         >
           <ChevronRight className="w-5 h-5" />
@@ -225,30 +227,32 @@ export default function Dashboard() {
       </div>
 
       {/* Saldo mensile */}
-      <div className="pt-1">
+      <div className="min-w-0 pt-1">
         <p className="text-sm text-muted-foreground">Monthly balance</p>
 
-        <h1 className="text-3xl font-bold tracking-tight mt-1">
+        <h1 className="text-3xl font-bold tracking-tight mt-1 break-words">
           {formatCurrency(d.balance)}
         </h1>
 
-        <div className="grid grid-cols-2 gap-3 mt-5">
-          <div className="rounded-xl bg-emerald-500/10 p-3">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-5">
+          <div className="min-w-0 rounded-xl bg-emerald-500/10 p-3">
             <div className="flex items-center gap-1.5 text-emerald-600">
-              <TrendingUp className="w-4 h-4" />
+              <TrendingUp className="w-4 h-4 shrink-0" />
               <span className="text-xs font-medium">Income</span>
             </div>
-            <p className="text-base font-semibold mt-1">
+
+            <p className="text-base font-semibold mt-1 break-words">
               {formatCurrency(d.income)}
             </p>
           </div>
 
-          <div className="rounded-xl bg-red-500/10 p-3">
+          <div className="min-w-0 rounded-xl bg-red-500/10 p-3">
             <div className="flex items-center gap-1.5 text-red-500">
-              <TrendingDown className="w-4 h-4" />
+              <TrendingDown className="w-4 h-4 shrink-0" />
               <span className="text-xs font-medium">Expenses</span>
             </div>
-            <p className="text-base font-semibold mt-1">
+
+            <p className="text-base font-semibold mt-1 break-words">
               {formatCurrency(d.expense)}
             </p>
           </div>
@@ -256,7 +260,7 @@ export default function Dashboard() {
       </div>
 
       {/* Suddivisione delle spese */}
-      <Card className="p-4">
+      <Card className="w-full min-w-0 p-3 sm:p-4 overflow-hidden">
         <div className="mb-2">
           <h3 className="font-semibold text-sm">Spese per categoria</h3>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -271,9 +275,9 @@ export default function Dashboard() {
       </Card>
 
       {/* Ultime 5 transazioni del mese */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <div>
+      <div className="w-full min-w-0">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="min-w-0">
             <h3 className="font-semibold text-sm">Attività del mese</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               Ultime 5 transazioni
@@ -282,13 +286,13 @@ export default function Dashboard() {
 
           <Link
             to="/transactions"
-            className="text-xs text-primary flex items-center gap-0.5"
+            className="text-xs text-primary flex items-center gap-0.5 shrink-0"
           >
             Vedi tutte <ChevronRight className="w-3 h-3" />
           </Link>
         </div>
 
-        <Card className="p-2">
+        <Card className="w-full min-w-0 p-2 overflow-hidden">
           {recent.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground py-8">
               Nessuna transazione in questo mese

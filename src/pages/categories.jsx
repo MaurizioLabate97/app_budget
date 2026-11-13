@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { localData } from "@/api/localDataClient";
 import { Button } from "@/components/ui/button";
@@ -21,10 +22,17 @@ export default function Categories() {
   async function load() {
     setLoading(true);
     try {
-      const res = await localData.entities.Category.filter({}, { sort: "name", limit: 100 });
+      const res = await localData.entities.Category.filter(
+        {},
+        { sort: "name", limit: 100 }
+      );
       setCategories(res.items);
     } catch (e) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: e.message,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -36,7 +44,11 @@ export default function Categories() {
       load();
       toast({ title: "Category deleted" });
     } catch (e) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: e.message,
+        variant: "destructive",
+      });
     }
   }
 
@@ -45,24 +57,38 @@ export default function Categories() {
 
   function renderGroup(title, items) {
     return (
-      <div>
+      <div className="w-full min-w-0">
         <h3 className="text-sm font-semibold text-muted-foreground mb-2">
           {title} ({items.length})
         </h3>
-        <div className="grid grid-cols-1 gap-3">
+
+        <div className="grid grid-cols-1 gap-3 w-full min-w-0">
           {items.map((c) => (
-            <Card key={c.id} className="p-4 flex items-center gap-3 group">
+            <Card
+              key={c.id}
+              className="w-full min-w-0 p-3 sm:p-4 flex items-center gap-2 sm:gap-3 overflow-hidden"
+            >
               <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: (c.color || "#6366f1") + "20" }}
+                className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                style={{
+                  backgroundColor: (c.color || "#6366f1") + "20",
+                }}
               >
-                <CategoryIcon name={c.icon} className="w-5 h-5" style={{ color: c.color }} />
+                <CategoryIcon
+                  name={c.icon}
+                  className="w-5 h-5"
+                  style={{ color: c.color || "#6366f1" }}
+                />
               </div>
-              <span className="font-medium flex-1 truncate">{c.name}</span>
+
+              <span className="font-medium flex-1 min-w-0 truncate">
+                {c.name}
+              </span>
+
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 opacity-40"
+                className="h-8 w-8 shrink-0 opacity-60 sm:opacity-40"
                 onClick={() => {
                   setEditing(c);
                   setDialogOpen(true);
@@ -70,10 +96,11 @@ export default function Categories() {
               >
                 <Pencil className="w-4 h-4" />
               </Button>
+
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 opacity-40 text-muted-foreground hover:text-red-600"
+                className="h-8 w-8 shrink-0 opacity-60 sm:opacity-40 text-muted-foreground hover:text-red-600"
                 onClick={() => handleDelete(c)}
               >
                 <Trash2 className="w-4 h-4" />
@@ -86,33 +113,46 @@ export default function Categories() {
   }
 
   return (
-    <div className="space-y-6 p-4 max-w-md mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Categories</h1>
-          <p className="text-sm text-muted-foreground">Build your categories as you go</p>
+    <div className="w-full min-w-0 max-w-md mx-auto space-y-6 px-3 sm:px-4 pt-4 pb-6">
+      <div className="flex items-center justify-between gap-3 min-w-0">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight">
+            Categories
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Build your categories as you go
+          </p>
         </div>
+
         <Button
           onClick={() => {
             setEditing(null);
             setDialogOpen(true);
           }}
-          className="gap-1.5"
+          className="gap-1.5 shrink-0"
         >
-          <Plus className="w-4 h-4" /> New
+          <Plus className="w-4 h-4" />
+          New
         </Button>
       </div>
+
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="w-8 h-8 border-4 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="w-full min-w-0 space-y-6">
           {renderGroup("Expenses", expense)}
           {renderGroup("Income", income)}
         </div>
       )}
-      <CategoryDialog open={dialogOpen} onOpenChange={setDialogOpen} category={editing} onSaved={load} />
+
+      <CategoryDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        category={editing}
+        onSaved={load}
+      />
     </div>
   );
 }
