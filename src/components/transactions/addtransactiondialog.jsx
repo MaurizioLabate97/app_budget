@@ -1,16 +1,39 @@
+
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 import { localData } from "@/api/localDataClient";
 import { useToast } from "@/components/ui/use-toast";
 import { CategoryIcon } from "@/components/categoryicon";
 import { cn } from "@/lib/utils";
 
-export default function AddTransactionDialog({ open, onOpenChange, categories, onAdded }) {
+export default function AddTransactionDialog({
+  open,
+  onOpenChange,
+  categories,
+  onAdded,
+  transaction = null,
+}) {
   const { toast } = useToast();
+
   const [type, setType] = useState("expense");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -19,8 +42,19 @@ export default function AddTransactionDialog({ open, onOpenChange, categories, o
   const [categoryId, setCategoryId] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const isEditing = !!transaction;
+
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+
+    if (transaction) {
+      setType(transaction.type || "expense");
+      setAmount(String(transaction.amount ?? ""));
+      setDate(transaction.date || new Date().toISOString().split("T")[0]);
+      setDescription(transaction.description || "");
+      setMerchant(transaction.merchant_name || "");
+      setCategoryId(transaction.category_id || "");
+    } else {
       setType("expense");
       setAmount("");
       setDescription("");
@@ -28,20 +62,29 @@ export default function AddTransactionDialog({ open, onOpenChange, categories, o
       setCategoryId("");
       setDate(new Date().toISOString().split("T")[0]);
     }
-  }, [open]);
+  }, [open, transaction]);
 
   const filteredCats = categories.filter((c) => c.type === type);
 
   async function handleSave() {
-    const amt = parseFloat(amount);
-    if (!amt || amt <= 0) {
-      toast({ title: "Enter an amount", variant: "destructive" });
+    const amt = parseFloat(amount.replace(",", "."));
+
+    if (!Number.isFinite(amt) || amt <= 0) {
+      toast({ title: "Enter a valid amount", variant: "destructive" });
       return;
     }
+
+    if (!date) {
+      toast({ title: "Choose a date", variant: "destructive" });
+      return;
+    }
+
     setSaving(true);
+
     try {
       const cat = categories.find((c) => c.id === categoryId);
-      await localData.entities.Transaction.create({
+
+      const data = {
         amount: amt,
         type,
         date,
@@ -50,13 +93,29 @@ export default function AddTransactionDialog({ open, onOpenChange, categories, o
         category_id: categoryId || undefined,
         category_name: cat?.name,
         is_categorized: !!categoryId,
-        source: "manual",
-      });
+      };
+
+      if (isEditing) {
+        await localData.entities.Transaction.update(transaction.id, data);
+      } else {
+        await localData.entities.Transaction.create({
+          ...data,
+          source: "manual",
+        });
+      }
+
       onAdded();
       onOpenChange(false);
-      toast({ title: "Transaction added" });
+
+      toast({
+        title: isEditing ? "Transaction updated" : "Transaction added",
+      });
     } catch (e) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: e.message,
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
@@ -66,8 +125,11 @@ export default function AddTransactionDialog({ open, onOpenChange, categories, o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add transaction</DialogTitle>
+          <DialogTitle>
+            {isEditing ? "Edit transaction" : "Add transaction"}
+          </DialogTitle>
         </DialogHeader>
+
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
             <Button
@@ -79,6 +141,7 @@ export default function AddTransactionDialog({ open, onOpenChange, categories, o
             >
               Expense
             </Button>
+
             <Button
               variant={type === "income" ? "default" : "outline"}
               className={cn(type === "income" && "bg-emerald-600 hover:bg-emerald-700")}
@@ -90,35 +153,66 @@ export default function AddTransactionDialog({ open, onOpenChange, categories, o
               Income
             </Button>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Amount (€)</Label>
-              <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+              <Input
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="0.00"
+              />
             </div>
+
             <div className="space-y-1.5">
               <Label>Date</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
             </div>
           </div>
+
           <div className="space-y-1.5">
             <Label>Description</Label>
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Grocery shopping" />
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. Grocery shopping"
+            />
           </div>
+
           <div className="space-y-1.5">
             <Label>Merchant (optional)</Label>
-            <Input value={merchant} onChange={(e) => setMerchant(e.target.value)} placeholder="e.g. Esselunga" />
+            <Input
+              value={merchant}
+              onChange={(e) => setMerchant(e.target.value)}
+              placeholder="e.g. Esselunga"
+            />
           </div>
+
           <div className="space-y-1.5">
             <Label>Category</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
+            <Select
+              value={categoryId}
+              onValueChange={setCategoryId}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Choose a category" />
               </SelectTrigger>
+
               <SelectContent>
                 {filteredCats.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     <span className="flex items-center gap-2">
-                      <CategoryIcon name={c.icon} className="w-4 h-4" style={{ color: c.color }} />
+                      <CategoryIcon
+                        name={c.icon}
+                        className="w-4 h-4"
+                        style={{ color: c.color }}
+                      />
                       {c.name}
                     </span>
                   </SelectItem>
@@ -127,12 +221,17 @@ export default function AddTransactionDialog({ open, onOpenChange, categories, o
             </Select>
           </div>
         </div>
+
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
+
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Add"}
+            {saving ? "Saving..." : isEditing ? "Save" : "Add"}
           </Button>
         </DialogFooter>
       </DialogContent>

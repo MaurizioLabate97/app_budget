@@ -1,16 +1,26 @@
+
 import React, { useState, useEffect, useMemo } from "react";
+
 import { localData } from "@/api/localDataClient";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Search } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import TransactionRow from "@/components/transactions/transactionrow";
+import AddTransactionDialog from "@/components/transactions/addtransactiondialog";
 import { MONTH_NAMES } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export default function Transactions() {
   const { toast } = useToast();
+
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,35 +29,57 @@ export default function Transactions() {
   const [monthFilter, setMonthFilter] = useState("all");
   const [refresh, setRefresh] = useState(0);
 
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState(null);
+
   useEffect(() => {
     load();
+
     const handler = () => load();
     window.addEventListener("expense-added", handler);
+
     return () => window.removeEventListener("expense-added", handler);
   }, [refresh, typeFilter, monthFilter]);
 
   async function load() {
     setLoading(true);
+
     try {
       const query = {};
+
       if (typeFilter !== "all") query.type = typeFilter;
+
       if (monthFilter !== "all") {
         const [y, m] = monthFilter.split("-").map(Number);
         const start = new Date(y, m - 1, 1).toISOString().split("T")[0];
         const end = new Date(y, m, 1).toISOString().split("T")[0];
+
         query.date = { $gte: start, $lt: end };
       }
+
       if (search.trim()) {
-        query.description = { $regex: search.trim(), $options: "i" };
+        query.description = {
+          $regex: search.trim(),
+          $options: "i",
+        };
       }
+
       const [txRes, catRes] = await Promise.all([
-        localData.entities.Transaction.filter(query, { sort: "-date", limit: 100 }),
+        localData.entities.Transaction.filter(query, {
+          sort: "-date",
+          limit: 100,
+        }),
         localData.entities.Category.filter({}, { limit: 100 }),
       ]);
+
       setTransactions(txRes.items);
       setCategories(catRes.items);
     } catch (e) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: e.message,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -60,9 +92,14 @@ export default function Transactions() {
         category_name: categoryName,
         is_categorized: true,
       });
+
       setRefresh((r) => r + 1);
     } catch (e) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: e.message,
+        variant: "destructive",
+      });
     }
   }
 
@@ -72,29 +109,52 @@ export default function Transactions() {
       setRefresh((r) => r + 1);
       toast({ title: "Transaction deleted" });
     } catch (e) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({
+        title: "Error",
+        description: e.message,
+        variant: "destructive",
+      });
+    }
+  }
+
+  function handleEdit(tx) {
+    setEditingTransaction(tx);
+    setEditDialogOpen(true);
+  }
+
+  function handleDialogOpenChange(open) {
+    setEditDialogOpen(open);
+
+    if (!open) {
+      setEditingTransaction(null);
     }
   }
 
   const monthOptions = useMemo(() => {
     const opts = [];
     const now = new Date();
+
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+
       opts.push({
         value: `${d.getFullYear()}-${d.getMonth() + 1}`,
         label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`,
       });
     }
+
     return opts;
   }, []);
 
   return (
     <div className="space-y-3 p-4 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold tracking-tight pt-2">Transactions</h1>
+      <h1 className="text-2xl font-bold tracking-tight pt-2">
+        Transactions
+      </h1>
 
       <div className="relative">
         <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -112,19 +172,24 @@ export default function Transactions() {
               onClick={() => setTypeFilter(t)}
               className={cn(
                 "flex-1 py-1.5 text-xs font-medium rounded-md capitalize transition-colors",
-                typeFilter === t ? "bg-background shadow-sm text-foreground" : "text-muted-foreground"
+                typeFilter === t
+                  ? "bg-background shadow-sm text-foreground"
+                  : "text-muted-foreground"
               )}
             >
               {t === "all" ? "All" : t}
             </button>
           ))}
         </div>
+
         <Select value={monthFilter} onValueChange={setMonthFilter}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Month" />
           </SelectTrigger>
+
           <SelectContent>
             <SelectItem value="all">All months</SelectItem>
+
             {monthOptions.map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}
@@ -151,10 +216,19 @@ export default function Transactions() {
               categories={categories}
               onCategorize={handleCategorize}
               onDelete={handleDelete}
+              onEdit={handleEdit}
             />
           ))
         )}
       </Card>
+
+      <AddTransactionDialog
+        open={editDialogOpen}
+        onOpenChange={handleDialogOpenChange}
+        categories={categories}
+        onAdded={() => setRefresh((r) => r + 1)}
+        transaction={editingTransaction}
+      />
     </div>
   );
 }
