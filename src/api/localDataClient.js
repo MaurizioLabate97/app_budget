@@ -672,8 +672,7 @@ export async function getCategoryUsage(categoryId) {
 }
 
 function uncategorize(transaction, now) {
-  // eslint-disable-next-line no-unused-vars
-  const { category_id, category_name, ...rest } = transaction;
+  const { category_id: _categoryId, category_name: _categoryName, ...rest } = transaction;
 
   return { ...rest, is_categorized: false, updated_date: now };
 }

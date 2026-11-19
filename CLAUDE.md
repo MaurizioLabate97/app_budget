@@ -45,14 +45,12 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 - UI in italiano con formati `it-IT`.
 - Importi con la virgola.
 - `package.json` ripulito: da 67 a 22 dipendenze, tolta anche `nitro`. Config di ESLint e jsconfig corrette.
+- Pulizia fase 2 (19/11/2026): rimossi componenti, hooks e utils inutilizzati e i componenti shadcn non usati. In `src/components/ui/` restano solo alert-dialog, button, card, dialog, drawer, input, label, popover, select, toast, toaster e use-toast. Il lint passa senza errori né warning.
 
-**Da completare (pulizia, fase 2):** se `src/components/ui/accordion.jsx` esiste ancora, l'utente non ha ancora eseguito la pulizia. Restano da eliminare con `git rm`, dopo conferma dell'utente:
-- `localDataClientBackup.js`
-- `src/components/GoogleIcon.jsx`, `src/components/StatCard.jsx`, `src/components/UserNotRegisteredError.jsx`
-- `src/hooks/` (tutta la cartella), `src/utils/` (tutta la cartella)
-- in `src/components/ui/`: accordion, alert, aspect-ratio, avatar, badge, breadcrumb, calendar, carousel, chart, checkbox, collapsible, context-menu, dropdown-menu, form, hover-card, input-otp, menubar, navigation-menu, pagination, progress, radio-group, resizable, scroll-area, separator, sheet, sidebar, skeleton, slider, sonner, switch, table, tabs, textarea, toggle-group, toggle, tooltip (`.jsx`)
-
-Poi `npm install` per aggiornare `package-lock.json`, `npm run build` e `npm run lint`. Il lint ora copre tutto `src` (tranne `components/ui`) e può segnalare warning nuovi. **Tieni** `src/components/charts/balance.jsx` e `monthlytrendchart.jsx`: non sono usati, ma serviranno per le statistiche.
+**Note:**
+- `src/components/charts/balance.jsx` e `monthlytrendchart.jsx` non sono usati, ma vanno **tenuti** per le statistiche.
+- Il bundle supera i 500 kB (avviso di Vite): valutare il code splitting con `import()` dinamici.
+- `npm audit` segnala 5 vulnerabilità moderate, non ancora valutate.
 
 **Roadmap:**
 - **Fase 3, feature:**

@@ -34,7 +34,9 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
     try {
       const res = await localData.entities.Category.filter({}, { sort: "name", limit: 100 });
       setCategories(res.items);
-    } catch (e) {}
+    } catch {
+      // categorie non caricate: il selettore resta vuoto
+    }
   }
 
   const filteredCats = categories.filter((c) => c.type === type);
