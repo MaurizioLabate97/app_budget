@@ -67,7 +67,7 @@ export default function CategoryDialog({
   async function handleSave() {
     if (!name.trim()) {
       toast({
-        title: "Name required",
+        title: "Il nome è obbligatorio",
         variant: "destructive",
       });
       return;
@@ -97,11 +97,11 @@ export default function CategoryDialog({
       onOpenChange(false);
 
       toast({
-        title: category ? "Category updated" : "Category created",
+        title: category ? "Categoria aggiornata" : "Categoria creata",
       });
     } catch (e) {
       toast({
-        title: "Error",
+        title: "Errore",
         description: e.message,
         variant: "destructive",
       });
@@ -115,41 +115,41 @@ export default function CategoryDialog({
       <DialogContent className="w-[calc(100%-2rem)] max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {category ? "Edit category" : "New category"}
+            {category ? "Modifica categoria" : "Nuova categoria"}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 min-w-0">
           <div className="space-y-1.5">
-            <Label>Name</Label>
+            <Label>Nome</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Groceries"
+              placeholder="es. Spesa alimentare"
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Type</Label>
+            <Label>Tipo</Label>
             <Select value={type} onValueChange={setType}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="expense">Expense</SelectItem>
-                <SelectItem value="income">Income</SelectItem>
+                <SelectItem value="expense">Spesa</SelectItem>
+                <SelectItem value="income">Entrata</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-1.5">
-            <Label>Color</Label>
+            <Label>Colore</Label>
             <div className="flex flex-wrap gap-2">
               {COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
-                  aria-label={`Select color ${c}`}
+                  aria-label={`Seleziona colore ${c}`}
                   aria-pressed={color === c}
                   onClick={() => setColor(c)}
                   className={cn(
@@ -165,13 +165,13 @@ export default function CategoryDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Icon</Label>
+            <Label>Icona</Label>
             <div className="grid grid-cols-8 gap-1.5 max-h-32 overflow-auto p-1">
               {ICON_NAMES.map((n) => (
                 <button
                   key={n}
                   type="button"
-                  aria-label={`Select icon ${n}`}
+                  aria-label={`Seleziona icona ${n}`}
                   aria-pressed={icon === n}
                   onClick={() => setIcon(n)}
                   className={cn(
@@ -194,14 +194,14 @@ export default function CategoryDialog({
             variant="outline"
             onClick={() => onOpenChange(false)}
           >
-            Cancel
+            Annulla
           </Button>
           <Button
             type="button"
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? "Saving..." : "Save"}
+            {saving ? "Salvataggio..." : "Salva"}
           </Button>
         </DialogFooter>
       </DialogContent>

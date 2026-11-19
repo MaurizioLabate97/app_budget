@@ -1,11 +1,12 @@
 
-import React from "react";
+import React, { useState } from "react";
 
 import { formatCurrency } from "@/lib/format";
 import { CategoryIcon } from "@/components/categoryicon";
 import CategorySelect from "./categoryselect";
 import { Trash2, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 export default function TransactionRow({
   transaction,
@@ -14,9 +15,12 @@ export default function TransactionRow({
   onDelete,
   onEdit,
 }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const isIncome = transaction.type === "income";
 
-  const date = new Date(transaction.date).toLocaleDateString("en-US", {
+  // "YYYY-MM-DD" interpretata come data locale (new Date("YYYY-MM-DD") sarebbe UTC).
+  const [y, m, d] = String(transaction.date || "").split("-").map(Number);
+  const date = new Date(y, (m || 1) - 1, d || 1).toLocaleDateString("it-IT", {
     day: "numeric",
     month: "short",
   });
@@ -39,13 +43,13 @@ export default function TransactionRow({
 
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm truncate">
-          {transaction.merchant_name || transaction.description || "Transaction"}
+          {transaction.merchant_name || transaction.description || "Movimento"}
         </p>
 
         <p className="text-xs text-muted-foreground">
           {date}
-          {transaction.pending ? " · pending" : ""}
-          {transaction.source === "bank" ? " · bank" : ""}
+          {transaction.pending ? " · in sospeso" : ""}
+          {transaction.source === "bank" ? " · banca" : ""}
         </p>
       </div>
 
@@ -68,25 +72,35 @@ export default function TransactionRow({
         {formatCurrency(transaction.amount)}
       </div>
 
-      <button
-        type="button"
-        onClick={() => onEdit(transaction)}
-        title="Edit transaction"
-        aria-label="Edit transaction"
-        className="text-muted-foreground hover:text-primary p-1 shrink-0"
-      >
-        <Pencil className="w-4 h-4" />
-      </button>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={() => onEdit(transaction)}
+          title="Modifica movimento"
+          aria-label="Modifica movimento"
+          className="text-muted-foreground hover:text-primary p-1 shrink-0"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+      )}
 
       <button
         type="button"
-        onClick={() => onDelete(transaction)}
-        title="Delete transaction"
-        aria-label="Delete transaction"
+        onClick={() => setConfirmOpen(true)}
+        title="Elimina movimento"
+        aria-label="Elimina movimento"
         className="text-muted-foreground hover:text-red-600 p-1 -mr-1 shrink-0"
       >
         <Trash2 className="w-4 h-4" />
       </button>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Eliminare il movimento?"
+        description={`${transaction.merchant_name || transaction.description || "Movimento"} · ${isIncome ? "+" : "-"}${formatCurrency(transaction.amount)} · ${date}`}
+        onConfirm={() => onDelete(transaction)}
+      />
     </div>
   );
 }

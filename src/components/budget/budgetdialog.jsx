@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CategoryIcon } from "@/components/categoryicon";
 import { localData } from "@/api/localDataClient";
 import { useToast } from "@/components/ui/use-toast";
+import { parseAmount, formatAmountInput } from "@/lib/format";
 
 export default function BudgetDialog({ open, onOpenChange, categories, month, year, existing, onSaved }) {
   const { toast } = useToast();
@@ -18,18 +19,18 @@ export default function BudgetDialog({ open, onOpenChange, categories, month, ye
   useEffect(() => {
     if (open) {
       setCategoryId(existing?.category_id || "");
-      setLimit(existing ? String(existing.amount_limit) : "");
+      setLimit(existing ? formatAmountInput(existing.amount_limit) : "");
     }
   }, [open, existing]);
 
   async function handleSave() {
-    const lim = parseFloat(limit);
+    const lim = parseAmount(limit);
     if (!categoryId) {
-      toast({ title: "Choose a category", variant: "destructive" });
+      toast({ title: "Scegli una categoria", variant: "destructive" });
       return;
     }
-    if (!lim || lim <= 0) {
-      toast({ title: "Enter a limit", variant: "destructive" });
+    if (!Number.isFinite(lim) || lim <= 0) {
+      toast({ title: "Inserisci un limite", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -48,9 +49,9 @@ export default function BudgetDialog({ open, onOpenChange, categories, month, ye
       }
       onSaved();
       onOpenChange(false);
-      toast({ title: "Budget saved" });
+      toast({ title: "Budget salvato" });
     } catch (e) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Errore", description: e.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -60,14 +61,14 @@ export default function BudgetDialog({ open, onOpenChange, categories, month, ye
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{existing ? "Edit budget" : "Set a budget"}</DialogTitle>
+          <DialogTitle>{existing ? "Modifica budget" : "Nuovo budget"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Category</Label>
+            <Label>Categoria</Label>
             <Select value={categoryId} onValueChange={setCategoryId} disabled={!!existing}>
               <SelectTrigger>
-                <SelectValue placeholder="Choose a category" />
+                <SelectValue placeholder="Scegli una categoria" />
               </SelectTrigger>
               <SelectContent>
                 {expenseCats.map((c) => (
@@ -82,16 +83,16 @@ export default function BudgetDialog({ open, onOpenChange, categories, month, ye
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Monthly limit (€)</Label>
-            <Input type="number" step="0.01" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="0.00" />
+            <Label>Limite mensile (€)</Label>
+            <Input type="text" inputMode="decimal" autoComplete="off" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="0,00" />
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            Annulla
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
+            {saving ? "Salvataggio..." : "Salva"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -345,15 +345,20 @@ function validateBackup(backup) {
   return normalized;
 }
 
+/**
+ * Sostituisce tutti i dati locali con quelli di un backup già validato.
+ * `data` è indicizzato per nome entità (Transaction, Category, ...),
+ * come restituito da validateBackup().
+ */
 async function replaceAllData(data) {
   if (!Capacitor.isNativePlatform()) {
-    const store = getBrowserStore();
+    const store = await getBrowserStore();
 
-    for (const [entity, table] of Object.entries(TABLES)) {
-      store[table] = data[table];
+    for (const [entityName, table] of Object.entries(TABLES)) {
+      store[table] = data[entityName] ?? [];
     }
 
-    persistBrowser(store);
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
     return;
   }
 
@@ -362,13 +367,13 @@ async function replaceAllData(data) {
   await db.beginTransaction();
 
   try {
-    for (const table of Object.values(TABLES)) {
+    for (const [entityName, table] of Object.entries(TABLES)) {
       await db.execute(
         `DELETE FROM ${table}`,
         false
       );
 
-      for (const item of data[table]) {
+      for (const item of data[entityName] ?? []) {
         await db.run(
           `INSERT INTO ${table} (id, data_json, created_date, updated_date)
            VALUES (?, ?, ?, ?)`,
@@ -649,6 +654,108 @@ export const localData = {
     },
   },
 };
+
+/**
+ * Quante transazioni e quanti budget usano una categoria.
+ * Serve a mostrare l'impatto prima dell'eliminazione.
+ */
+export async function getCategoryUsage(categoryId) {
+  const [transactions, budgets] = await Promise.all([
+    readAll('Transaction'),
+    readAll('Budget'),
+  ]);
+
+  return {
+    transactions: transactions.filter((t) => t.category_id === categoryId).length,
+    budgets: budgets.filter((b) => b.category_id === categoryId).length,
+  };
+}
+
+function uncategorize(transaction, now) {
+  // eslint-disable-next-line no-unused-vars
+  const { category_id, category_name, ...rest } = transaction;
+
+  return { ...rest, is_categorized: false, updated_date: now };
+}
+
+/**
+ * Elimina una categoria in modo consistente:
+ * - le transazioni collegate restano, ma diventano "senza categoria";
+ * - i budget collegati vengono eliminati.
+ * Su SQLite avviene tutto in un'unica transazione.
+ */
+export async function deleteCategoryCascade(categoryId) {
+  const result = await serializeWrite(async () => {
+    const now = new Date().toISOString();
+    const affectedTransactions = (await readAll('Transaction')).filter(
+      (t) => t.category_id === categoryId
+    );
+    const affectedBudgets = (await readAll('Budget')).filter(
+      (b) => b.category_id === categoryId
+    );
+
+    const db = await getSqliteDb();
+
+    if (db) {
+      await db.beginTransaction();
+
+      try {
+        for (const transaction of affectedTransactions) {
+          const updated = uncategorize(transaction, now);
+
+          await db.run(
+            `UPDATE transactions SET data_json = ?, updated_date = ? WHERE id = ?`,
+            [JSON.stringify(updated), now, transaction.id],
+            false
+          );
+        }
+
+        for (const budget of affectedBudgets) {
+          await db.run(`DELETE FROM budgets WHERE id = ?`, [budget.id], false);
+        }
+
+        await db.run(`DELETE FROM categories WHERE id = ?`, [categoryId], false);
+
+        await db.commitTransaction();
+      } catch (error) {
+        try {
+          await db.rollbackTransaction();
+        } catch (rollbackError) {
+          console.error('Errore durante il rollback SQLite:', rollbackError);
+        }
+
+        throw error;
+      }
+    } else {
+      const store = await getBrowserStore();
+
+      store.transactions = (store.transactions || []).map((t) =>
+        t.category_id === categoryId ? uncategorize(t, now) : t
+      );
+      store.budgets = (store.budgets || []).filter(
+        (b) => b.category_id !== categoryId
+      );
+      store.categories = (store.categories || []).filter(
+        (c) => c.id !== categoryId
+      );
+
+      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    }
+
+    return {
+      transactions: affectedTransactions.length,
+      budgets: affectedBudgets.length,
+    };
+  });
+
+  dispatchDataChanged({
+    entityName: 'Category',
+    action: 'delete',
+    id: categoryId,
+  });
+
+  return result;
+}
 
 export async function exportLocalData() {
   const output = {

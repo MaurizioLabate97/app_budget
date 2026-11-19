@@ -17,7 +17,7 @@ export default function BalanceChart({ data }) {
         <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
         <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `€${v}`} />
         <Tooltip formatter={(v) => formatCurrency(v)} contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 13 }} />
-        <Area type="monotone" dataKey="balance" name="Net balance" stroke="#6366f1" strokeWidth={2} fill="url(#balanceGrad)" />
+        <Area type="monotone" dataKey="balance" name="Saldo netto" stroke="#6366f1" strokeWidth={2} fill="url(#balanceGrad)" />
       </AreaChart>
     </ResponsiveContainer>
   );

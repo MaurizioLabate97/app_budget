@@ -7,7 +7,9 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { CategoryIcon } from "@/components/categoryicon";
 import BudgetDialog from "@/components/budget/budgetdialog";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { formatCurrency, MONTH_NAMES } from "@/lib/format";
+import { getMonthRange } from "@/lib/date";
 
 export default function Budgets() {
   const { toast } = useToast();
@@ -17,6 +19,7 @@ export default function Budgets() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [toDelete, setToDelete] = useState(null);
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -31,8 +34,7 @@ export default function Budgets() {
   async function load() {
     setLoading(true);
     try {
-      const start = new Date(year, month - 1, 1).toISOString().split("T")[0];
-      const end = new Date(year, month, 1).toISOString().split("T")[0];
+      const { start, end } = getMonthRange(year, month);
       const [budRes, catRes, spentAgg] = await Promise.all([
         localData.entities.Budget.filter({ month, year }, { limit: 100 }),
         localData.entities.Category.filter({ type: "expense" }, { limit: 100 }),
@@ -48,7 +50,7 @@ export default function Budgets() {
       spentAgg.rows.forEach((r) => (s[r.category_id] = r.sum_amount || 0));
       setSpent(s);
     } catch (e) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Errore", description: e.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -58,9 +60,9 @@ export default function Budgets() {
     try {
       await localData.entities.Budget.delete(b.id);
       load();
-      toast({ title: "Budget removed" });
+      toast({ title: "Budget eliminato" });
     } catch (e) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Errore", description: e.message, variant: "destructive" });
     }
   }
 
@@ -77,8 +79,8 @@ export default function Budgets() {
     <div className="space-y-4 p-4 max-w-md mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Budgets</h1>
-          <p className="text-sm text-muted-foreground">Set monthly limits per category</p>
+          <h1 className="text-2xl font-bold tracking-tight">Budget</h1>
+          <p className="text-sm text-muted-foreground">Limiti di spesa mensili per categoria</p>
         </div>
         <div className="flex gap-2">
           <Select
@@ -107,7 +109,7 @@ export default function Budgets() {
             }}
             className="gap-1.5"
           >
-            <Plus className="w-4 h-4" /> New
+            <Plus className="w-4 h-4" /> Nuovo
           </Button>
         </div>
       </div>
@@ -118,7 +120,7 @@ export default function Budgets() {
         </div>
       ) : budgets.length === 0 ? (
         <Card className="p-10 text-center">
-          <p className="text-sm text-muted-foreground">No budgets set for this month yet.</p>
+          <p className="text-sm text-muted-foreground">Nessun budget impostato per questo mese.</p>
           <Button
             variant="outline"
             size="sm"
@@ -128,7 +130,7 @@ export default function Budgets() {
               setDialogOpen(true);
             }}
           >
-            Set your first budget
+            Imposta il primo budget
           </Button>
         </Card>
       ) : (
@@ -153,9 +155,9 @@ export default function Budgets() {
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{cat?.name || b.category_name || "Unknown"}</p>
+                    <p className="font-medium text-sm truncate">{cat?.name || b.category_name || "Sconosciuta"}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatCurrency(s)} of {formatCurrency(b.amount_limit)}
+                      {formatCurrency(s)} su {formatCurrency(b.amount_limit)}
                     </p>
                   </div>
                   <span className={"text-sm font-semibold " + (over ? "text-red-600" : "text-muted-foreground")}>
@@ -176,7 +178,7 @@ export default function Budgets() {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 opacity-40 text-muted-foreground hover:text-red-600"
-                    onClick={() => handleDelete(b)}
+                    onClick={() => setToDelete(b)}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -185,13 +187,29 @@ export default function Budgets() {
                   <div className={"h-full rounded-full transition-all " + barColor} style={{ width: `${pct}%` }} />
                 </div>
                 {over && (
-                  <p className="text-xs text-red-600 mt-1.5">Over budget by {formatCurrency(s - b.amount_limit)}</p>
+                  <p className="text-xs text-red-600 mt-1.5">Sforato di {formatCurrency(s - b.amount_limit)}</p>
                 )}
               </Card>
             );
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!toDelete}
+        onOpenChange={(open) => !open && setToDelete(null)}
+        title="Eliminare il budget?"
+        description={
+          toDelete
+            ? `Il budget di ${formatCurrency(toDelete.amount_limit)} per "${
+                categories.find((c) => c.id === toDelete.category_id)?.name ||
+                toDelete.category_name ||
+                "categoria sconosciuta"
+              }" verrà eliminato. Le transazioni non vengono toccate.`
+            : ""
+        }
+        onConfirm={() => handleDelete(toDelete)}
+      />
 
       <BudgetDialog
         open={dialogOpen}

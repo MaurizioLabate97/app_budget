@@ -12,9 +12,9 @@ import { cn } from "@/lib/utils";
 
 const tabs = [
   { to: "/", label: "Home", icon: Home, end: true },
-  { to: "/transactions", label: "Activity", icon: ArrowLeftRight, end: false },
-  { to: "/budgets", label: "Budgets", icon: Target, end: false },
-  { to: "/more", label: "More", icon: MoreHorizontal, end: false },
+  { to: "/transactions", label: "Movimenti", icon: ArrowLeftRight, end: false },
+  { to: "/budgets", label: "Budget", icon: Target, end: false },
+  { to: "/more", label: "Altro", icon: MoreHorizontal, end: false },
 ];
 
 export default function BottomNav({ onAdd }) {
@@ -54,7 +54,7 @@ export default function BottomNav({ onAdd }) {
         <button
           type="button"
           onClick={onAdd}
-          aria-label="Add transaction"
+          aria-label="Aggiungi movimento"
           className="relative -mt-6 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95"
         >
           <Plus className="h-7 w-7" />

@@ -24,6 +24,8 @@ import { localData } from "@/api/localDataClient";
 import { useToast } from "@/components/ui/use-toast";
 import { CategoryIcon } from "@/components/categoryicon";
 import { cn } from "@/lib/utils";
+import { todayLocal } from "@/lib/date";
+import { parseAmount, formatAmountInput } from "@/lib/format";
 
 export default function AddTransactionDialog({
   open,
@@ -36,7 +38,7 @@ export default function AddTransactionDialog({
 
   const [type, setType] = useState("expense");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayLocal());
   const [description, setDescription] = useState("");
   const [merchant, setMerchant] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -49,8 +51,8 @@ export default function AddTransactionDialog({
 
     if (transaction) {
       setType(transaction.type || "expense");
-      setAmount(String(transaction.amount ?? ""));
-      setDate(transaction.date || new Date().toISOString().split("T")[0]);
+      setAmount(formatAmountInput(transaction.amount));
+      setDate(transaction.date || todayLocal());
       setDescription(transaction.description || "");
       setMerchant(transaction.merchant_name || "");
       setCategoryId(transaction.category_id || "");
@@ -60,22 +62,22 @@ export default function AddTransactionDialog({
       setDescription("");
       setMerchant("");
       setCategoryId("");
-      setDate(new Date().toISOString().split("T")[0]);
+      setDate(todayLocal());
     }
   }, [open, transaction]);
 
   const filteredCats = categories.filter((c) => c.type === type);
 
   async function handleSave() {
-    const amt = parseFloat(amount.replace(",", "."));
+    const amt = parseAmount(amount);
 
     if (!Number.isFinite(amt) || amt <= 0) {
-      toast({ title: "Enter a valid amount", variant: "destructive" });
+      toast({ title: "Inserisci un importo valido", variant: "destructive" });
       return;
     }
 
     if (!date) {
-      toast({ title: "Choose a date", variant: "destructive" });
+      toast({ title: "Scegli una data", variant: "destructive" });
       return;
     }
 
@@ -108,11 +110,11 @@ export default function AddTransactionDialog({
       onOpenChange(false);
 
       toast({
-        title: isEditing ? "Transaction updated" : "Transaction added",
+        title: isEditing ? "Movimento aggiornato" : "Movimento aggiunto",
       });
     } catch (e) {
       toast({
-        title: "Error",
+        title: "Errore",
         description: e.message,
         variant: "destructive",
       });
@@ -126,7 +128,7 @@ export default function AddTransactionDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? "Edit transaction" : "Add transaction"}
+            {isEditing ? "Modifica movimento" : "Nuovo movimento"}
           </DialogTitle>
         </DialogHeader>
 
@@ -139,7 +141,7 @@ export default function AddTransactionDialog({
                 setCategoryId("");
               }}
             >
-              Expense
+              Spesa
             </Button>
 
             <Button
@@ -150,24 +152,25 @@ export default function AddTransactionDialog({
                 setCategoryId("");
               }}
             >
-              Income
+              Entrata
             </Button>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Amount (€)</Label>
+              <Label>Importo (€)</Label>
               <Input
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
+                placeholder="0,00"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label>Date</Label>
+              <Label>Data</Label>
               <Input
                 type="date"
                 value={date}
@@ -177,16 +180,16 @@ export default function AddTransactionDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Description</Label>
+            <Label>Descrizione</Label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. Grocery shopping"
+              placeholder="es. Spesa al supermercato"
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label>Merchant (optional)</Label>
+            <Label>Esercente (facoltativo)</Label>
             <Input
               value={merchant}
               onChange={(e) => setMerchant(e.target.value)}
@@ -195,13 +198,13 @@ export default function AddTransactionDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Category</Label>
+            <Label>Categoria</Label>
             <Select
               value={categoryId}
               onValueChange={setCategoryId}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Choose a category" />
+                <SelectValue placeholder="Scegli una categoria" />
               </SelectTrigger>
 
               <SelectContent>
@@ -227,11 +230,11 @@ export default function AddTransactionDialog({
             variant="outline"
             onClick={() => onOpenChange(false)}
           >
-            Cancel
+            Annulla
           </Button>
 
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : isEditing ? "Save" : "Add"}
+            {saving ? "Salvataggio..." : isEditing ? "Salva" : "Aggiungi"}
           </Button>
         </DialogFooter>
       </DialogContent>

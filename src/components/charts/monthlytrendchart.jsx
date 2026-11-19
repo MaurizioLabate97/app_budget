@@ -12,8 +12,8 @@ export default function MonthlyTrendChart({ data }) {
         <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `€${v}`} />
         <Tooltip formatter={(v) => formatCurrency(v)} contentStyle={{ borderRadius: 8, border: "1px solid hsl(var(--border))", fontSize: 13 }} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 13 }} />
-        <Bar dataKey="income" name="Income" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={28} />
-        <Bar dataKey="expense" name="Expense" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={28} />
+        <Bar dataKey="income" name="Entrate" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={28} />
+        <Bar dataKey="expense" name="Spese" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={28} />
       </BarChart>
     </ResponsiveContainer>
   );

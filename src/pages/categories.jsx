@@ -1,12 +1,17 @@
 
 import React, { useState, useEffect } from "react";
-import { localData } from "@/api/localDataClient";
+import {
+  localData,
+  getCategoryUsage,
+  deleteCategoryCascade,
+} from "@/api/localDataClient";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { CategoryIcon } from "@/components/categoryicon";
 import CategoryDialog from "@/components/categories/categorydialog";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 export default function Categories() {
   const { toast } = useToast();
@@ -14,6 +19,7 @@ export default function Categories() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [toDelete, setToDelete] = useState(null); // { category, usage }
 
   useEffect(() => {
     load();
@@ -29,7 +35,7 @@ export default function Categories() {
       setCategories(res.items);
     } catch (e) {
       toast({
-        title: "Error",
+        title: "Errore",
         description: e.message,
         variant: "destructive",
       });
@@ -38,14 +44,44 @@ export default function Categories() {
     }
   }
 
-  async function handleDelete(cat) {
+  async function askDelete(cat) {
     try {
-      await localData.entities.Category.delete(cat.id);
-      load();
-      toast({ title: "Category deleted" });
+      const usage = await getCategoryUsage(cat.id);
+      setToDelete({ category: cat, usage });
     } catch (e) {
       toast({
-        title: "Error",
+        title: "Errore",
+        description: e.message,
+        variant: "destructive",
+      });
+    }
+  }
+
+  function deleteDescription({ category, usage }) {
+    const parts = [];
+    if (usage.transactions > 0) {
+      parts.push(
+        `${usage.transactions} ${usage.transactions === 1 ? "transazione resterà" : "transazioni resteranno"} senza categoria`
+      );
+    }
+    if (usage.budgets > 0) {
+      parts.push(
+        `${usage.budgets} ${usage.budgets === 1 ? "budget verrà eliminato" : "budget verranno eliminati"}`
+      );
+    }
+    return parts.length
+      ? `La categoria "${category.name}" è in uso: ${parts.join(" e ")}.`
+      : `La categoria "${category.name}" non è usata da nessuna transazione o budget.`;
+  }
+
+  async function handleDelete(cat) {
+    try {
+      await deleteCategoryCascade(cat.id);
+      load();
+      toast({ title: "Categoria eliminata" });
+    } catch (e) {
+      toast({
+        title: "Errore",
         description: e.message,
         variant: "destructive",
       });
@@ -101,7 +137,7 @@ export default function Categories() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 shrink-0 opacity-60 sm:opacity-40 text-muted-foreground hover:text-red-600"
-                onClick={() => handleDelete(c)}
+                onClick={() => askDelete(c)}
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
@@ -117,10 +153,10 @@ export default function Categories() {
       <div className="flex items-center justify-between gap-3 min-w-0">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">
-            Categories
+            Categorie
           </h1>
           <p className="text-sm text-muted-foreground">
-            Build your categories as you go
+            Crea le categorie man mano che ti servono
           </p>
         </div>
 
@@ -132,7 +168,7 @@ export default function Categories() {
           className="gap-1.5 shrink-0"
         >
           <Plus className="w-4 h-4" />
-          New
+          Nuova
         </Button>
       </div>
 
@@ -142,10 +178,18 @@ export default function Categories() {
         </div>
       ) : (
         <div className="w-full min-w-0 space-y-6">
-          {renderGroup("Expenses", expense)}
-          {renderGroup("Income", income)}
+          {renderGroup("Spese", expense)}
+          {renderGroup("Entrate", income)}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!toDelete}
+        onOpenChange={(open) => !open && setToDelete(null)}
+        title="Eliminare la categoria?"
+        description={toDelete ? deleteDescription(toDelete) : ""}
+        onConfirm={() => handleDelete(toDelete.category)}
+      />
 
       <CategoryDialog
         open={dialogOpen}

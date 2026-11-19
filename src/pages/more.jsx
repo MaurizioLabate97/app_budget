@@ -12,8 +12,8 @@ export default function More() {
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const items = [
-    { to: '/categories', icon: Tags, label: 'Categories', desc: 'Manage your categories' },
-    { to: '/bank', icon: Landmark, label: 'Bank accounts', desc: 'Automatic connection disabled in local mode' },
+    { to: '/categories', icon: Tags, label: 'Categorie', desc: 'Gestisci le tue categorie' },
+    { to: '/bank', icon: Landmark, label: 'Conti bancari', desc: 'Collegamento automatico disattivato in modalità locale' },
   ];
 
   async function backup() {
@@ -26,7 +26,7 @@ export default function More() {
         const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
         const { Share } = await import('@capacitor/share');
         const file = await Filesystem.writeFile({ path: filename, data: content, directory: Directory.Cache, encoding: Encoding.UTF8 });
-        await Share.share({ title: 'App Budget backup', text: 'Backup locale dei dati di App Budget', url: file.uri, dialogTitle: 'Save or share backup' });
+        await Share.share({ title: 'App Budget backup', text: 'Backup locale dei dati di App Budget', url: file.uri, dialogTitle: 'Salva o condividi il backup' });
       } else {
         const blob = new Blob([content], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -36,9 +36,9 @@ export default function More() {
         a.click();
         URL.revokeObjectURL(url);
       }
-      toast({ title: 'Backup created', description: 'Keep this file somewhere safe. It contains your financial data.' });
+      toast({ title: 'Backup creato', description: 'Conserva il file in un posto sicuro: contiene i tuoi dati finanziari.' });
     } catch (error) {
-      toast({ title: 'Backup failed', description: error.message || 'Unable to export data.', variant: 'destructive' });
+      toast({ title: 'Backup non riuscito', description: error.message || 'Impossibile esportare i dati.', variant: 'destructive' });
     } finally {
       setBusy(false);
     }
@@ -48,15 +48,15 @@ export default function More() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!window.confirm('Restore this backup? The current local data will be replaced.')) return;
+    if (!window.confirm('Ripristinare questo backup? I dati attuali verranno sostituiti.')) return;
     setBusy(true);
     try {
       const data = JSON.parse(await file.text());
       await importLocalData(data);
-      toast({ title: 'Backup restored', description: 'Your local data has been replaced with the selected backup.' });
+      toast({ title: 'Backup ripristinato', description: 'I dati locali sono stati sostituiti con quelli del backup.' });
       window.location.reload();
     } catch (error) {
-      toast({ title: 'Restore failed', description: error.message || 'The file is not a valid App Budget backup.', variant: 'destructive' });
+      toast({ title: 'Ripristino non riuscito', description: error.message || 'Il file non è un backup valido di App Budget.', variant: 'destructive' });
     } finally {
       setBusy(false);
     }
@@ -64,7 +64,7 @@ export default function More() {
 
   return (
     <div className="space-y-4 p-4 max-w-md mx-auto">
-      <h1 className="text-2xl font-bold tracking-tight pt-2">More</h1>
+      <h1 className="text-2xl font-bold tracking-tight pt-2">Altro</h1>
       <div className="space-y-2">
         {items.map((item) => (
           <Link key={item.to} to={item.to}>
@@ -77,10 +77,10 @@ export default function More() {
         ))}
       </div>
       <Card className="p-4 space-y-3">
-        <div className="flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary" /><h2 className="font-semibold">Local data & backup</h2></div>
-        <p className="text-sm text-muted-foreground">Your data is stored on this device. Export backups regularly and keep a copy somewhere safe; uninstalling the app or losing the phone may otherwise mean losing your data.</p>
-        <Button className="w-full gap-2" onClick={backup} disabled={busy}><Download className="w-4 h-4" /> Export backup</Button>
-        <Button className="w-full gap-2" variant="outline" onClick={() => fileRef.current?.click()} disabled={busy}><Upload className="w-4 h-4" /> Restore backup</Button>
+        <div className="flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-primary" /><h2 className="font-semibold">Dati locali e backup</h2></div>
+        <p className="text-sm text-muted-foreground">I tuoi dati sono salvati solo su questo dispositivo. Esporta un backup regolarmente e conservane una copia al sicuro: se disinstalli l'app o perdi il telefono, senza backup i dati vanno persi.</p>
+        <Button className="w-full gap-2" onClick={backup} disabled={busy}><Download className="w-4 h-4" /> Esporta backup</Button>
+        <Button className="w-full gap-2" variant="outline" onClick={() => fileRef.current?.click()} disabled={busy}><Upload className="w-4 h-4" /> Ripristina backup</Button>
         <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={restore} />
       </Card>
     </div>

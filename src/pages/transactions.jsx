@@ -16,6 +16,7 @@ import { useToast } from "@/components/ui/use-toast";
 import TransactionRow from "@/components/transactions/transactionrow";
 import AddTransactionDialog from "@/components/transactions/addtransactiondialog";
 import { MONTH_NAMES } from "@/lib/format";
+import { getMonthRange } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
 export default function Transactions() {
@@ -51,8 +52,7 @@ export default function Transactions() {
 
       if (monthFilter !== "all") {
         const [y, m] = monthFilter.split("-").map(Number);
-        const start = new Date(y, m - 1, 1).toISOString().split("T")[0];
-        const end = new Date(y, m, 1).toISOString().split("T")[0];
+        const { start, end } = getMonthRange(y, m);
 
         query.date = { $gte: start, $lt: end };
       }
@@ -76,7 +76,7 @@ export default function Transactions() {
       setCategories(catRes.items);
     } catch (e) {
       toast({
-        title: "Error",
+        title: "Errore",
         description: e.message,
         variant: "destructive",
       });
@@ -96,7 +96,7 @@ export default function Transactions() {
       setRefresh((r) => r + 1);
     } catch (e) {
       toast({
-        title: "Error",
+        title: "Errore",
         description: e.message,
         variant: "destructive",
       });
@@ -107,10 +107,10 @@ export default function Transactions() {
     try {
       await localData.entities.Transaction.delete(tx.id);
       setRefresh((r) => r + 1);
-      toast({ title: "Transaction deleted" });
+      toast({ title: "Movimento eliminato" });
     } catch (e) {
       toast({
-        title: "Error",
+        title: "Errore",
         description: e.message,
         variant: "destructive",
       });
@@ -149,7 +149,7 @@ export default function Transactions() {
   return (
     <div className="space-y-3 p-4 max-w-md mx-auto">
       <h1 className="text-2xl font-bold tracking-tight pt-2">
-        Transactions
+        Movimenti
       </h1>
 
       <div className="relative">
@@ -158,7 +158,7 @@ export default function Transactions() {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search..."
+          placeholder="Cerca... (premi Invio)"
           className="pl-9"
           onKeyDown={(e) => e.key === "Enter" && setRefresh((r) => r + 1)}
         />
@@ -177,18 +177,18 @@ export default function Transactions() {
                   : "text-muted-foreground"
               )}
             >
-              {t === "all" ? "All" : t}
+              {{ all: "Tutti", expense: "Spese", income: "Entrate" }[t]}
             </button>
           ))}
         </div>
 
         <Select value={monthFilter} onValueChange={setMonthFilter}>
           <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Month" />
+            <SelectValue placeholder="Mese" />
           </SelectTrigger>
 
           <SelectContent>
-            <SelectItem value="all">All months</SelectItem>
+            <SelectItem value="all">Tutti i mesi</SelectItem>
 
             {monthOptions.map((o) => (
               <SelectItem key={o.value} value={o.value}>
@@ -206,7 +206,7 @@ export default function Transactions() {
           </div>
         ) : transactions.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
-            <p className="text-sm">No transactions found</p>
+            <p className="text-sm">Nessun movimento trovato</p>
           </div>
         ) : (
           transactions.map((tx) => (

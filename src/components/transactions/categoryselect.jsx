@@ -78,7 +78,7 @@ export default function CategorySelect({
           )}
 
           <span className="max-w-[90px] truncate">
-            {currentCat ? currentCat.name : "Categorize"}
+            {currentCat ? currentCat.name : "Categorizza"}
           </span>
 
           <ChevronDown className="w-3 h-3 opacity-50" />
@@ -92,7 +92,7 @@ export default function CategorySelect({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search categories..."
+            placeholder="Cerca categoria..."
             className="h-8 pl-7 text-sm"
           />
         </div>
@@ -124,7 +124,7 @@ export default function CategorySelect({
 
           {filtered.length === 0 && (
             <div className="px-2 py-2 text-xs text-muted-foreground">
-              No matching categories
+              Nessuna categoria trovata
             </div>
           )}
         </div>
@@ -133,7 +133,7 @@ export default function CategorySelect({
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="New category..."
+            placeholder="Nuova categoria..."
             className="h-8 text-sm min-w-0"
             onKeyDown={(e) => e.key === "Enter" && handleCreate()}
           />
@@ -144,7 +144,7 @@ export default function CategorySelect({
             disabled={creating || !newName.trim()}
             className="shrink-0"
           >
-            Add
+            Aggiungi
           </Button>
         </div>
       </PopoverContent>

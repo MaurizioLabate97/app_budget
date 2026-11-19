@@ -12,14 +12,8 @@ import { Card } from "@/components/ui/card";
 import CategoryPieChart from "@/components/charts/categorypiechart";
 import { formatCurrency, MONTH_NAMES } from "@/lib/format";
 import TransactionRow from "@/components/transactions/transactionrow";
-
-function getLocalDateString(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
+import AddTransactionDialog from "@/components/transactions/addtransactiondialog";
+import { getMonthRange } from "@/lib/date";
 
 function getCurrentMonthKey() {
   const now = new Date();
@@ -32,6 +26,7 @@ export default function Dashboard() {
   const [recent, setRecent] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editingTransaction, setEditingTransaction] = useState(null);
 
   useEffect(() => {
     load(selectedMonth);
@@ -47,12 +42,7 @@ export default function Dashboard() {
 
     try {
       const [year, month] = monthKey.split("-").map(Number);
-      const monthIndex = month - 1;
-
-      const monthStart = `${monthKey}-01`;
-      const monthEnd = getLocalDateString(
-        new Date(year, monthIndex + 1, 1)
-      );
+      const { start: monthStart, end: monthEnd } = getMonthRange(year, month);
 
       const [summary, catAgg, catRes, recentRes] = await Promise.all([
         localData.entities.Transaction.aggregate({
@@ -99,7 +89,7 @@ export default function Dashboard() {
           const category = categoryMap[row.category_id];
 
           return {
-            name: category?.name || "Uncategorized",
+            name: category?.name || "Senza categoria",
             value: row.sum_amount || 0,
             color: category?.color || "#94a3b8",
           };
@@ -201,7 +191,7 @@ export default function Dashboard() {
           type="button"
           onClick={() => changeMonth(-1)}
           className="w-10 h-10 shrink-0 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
-          aria-label="Previous month"
+          aria-label="Mese precedente"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -212,7 +202,7 @@ export default function Dashboard() {
           </p>
 
           {isCurrentMonth && (
-            <p className="text-xs text-muted-foreground">Current month</p>
+            <p className="text-xs text-muted-foreground">Mese corrente</p>
           )}
         </div>
 
@@ -220,7 +210,7 @@ export default function Dashboard() {
           type="button"
           onClick={() => changeMonth(1)}
           className="w-10 h-10 shrink-0 flex items-center justify-center rounded-full hover:bg-muted transition-colors"
-          aria-label="Next month"
+          aria-label="Mese successivo"
         >
           <ChevronRight className="w-5 h-5" />
         </button>
@@ -228,7 +218,7 @@ export default function Dashboard() {
 
       {/* Saldo mensile */}
       <div className="min-w-0 pt-1">
-        <p className="text-sm text-muted-foreground">Monthly balance</p>
+        <p className="text-sm text-muted-foreground">Saldo del mese</p>
 
         <h1 className="text-3xl font-bold tracking-tight mt-1 break-words">
           {formatCurrency(d.balance)}
@@ -238,7 +228,7 @@ export default function Dashboard() {
           <div className="min-w-0 rounded-xl bg-emerald-500/10 p-3">
             <div className="flex items-center gap-1.5 text-emerald-600">
               <TrendingUp className="w-4 h-4 shrink-0" />
-              <span className="text-xs font-medium">Income</span>
+              <span className="text-xs font-medium">Entrate</span>
             </div>
 
             <p className="text-base font-semibold mt-1 break-words">
@@ -249,7 +239,7 @@ export default function Dashboard() {
           <div className="min-w-0 rounded-xl bg-red-500/10 p-3">
             <div className="flex items-center gap-1.5 text-red-500">
               <TrendingDown className="w-4 h-4 shrink-0" />
-              <span className="text-xs font-medium">Expenses</span>
+              <span className="text-xs font-medium">Spese</span>
             </div>
 
             <p className="text-base font-semibold mt-1 break-words">
@@ -274,13 +264,13 @@ export default function Dashboard() {
         />
       </Card>
 
-      {/* Ultime 5 transazioni del mese */}
+      {/* Ultimi 5 movimenti del mese */}
       <div className="w-full min-w-0">
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="min-w-0">
             <h3 className="font-semibold text-sm">Attività del mese</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Ultime 5 transazioni
+              Ultimi 5 movimenti
             </p>
           </div>
 
@@ -288,14 +278,14 @@ export default function Dashboard() {
             to="/transactions"
             className="text-xs text-primary flex items-center gap-0.5 shrink-0"
           >
-            Vedi tutte <ChevronRight className="w-3 h-3" />
+            Vedi tutti <ChevronRight className="w-3 h-3" />
           </Link>
         </div>
 
         <Card className="w-full min-w-0 p-2 overflow-hidden">
           {recent.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground py-8">
-              Nessuna transazione in questo mese
+              Nessun movimento in questo mese
             </p>
           ) : (
             recent.map((tx) => (
@@ -305,11 +295,22 @@ export default function Dashboard() {
                 categories={categories}
                 onCategorize={handleCategorize}
                 onDelete={handleDelete}
+                onEdit={setEditingTransaction}
               />
             ))
           )}
         </Card>
       </div>
+
+      <AddTransactionDialog
+        open={!!editingTransaction}
+        onOpenChange={(open) => {
+          if (!open) setEditingTransaction(null);
+        }}
+        categories={categories}
+        transaction={editingTransaction}
+        onAdded={() => load(selectedMonth)}
+      />
     </div>
   );
 }

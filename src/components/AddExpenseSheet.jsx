@@ -6,6 +6,8 @@ import { localData } from "@/api/localDataClient";
 import { useToast } from "@/components/ui/use-toast";
 import { CategoryIcon } from "@/components/categoryicon";
 import { cn } from "@/lib/utils";
+import { todayLocal } from "@/lib/date";
+import { parseAmount } from "@/lib/format";
 
 export default function AddExpenseSheet({ open, onOpenChange }) {
   const { toast } = useToast();
@@ -13,7 +15,7 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayLocal());
   const [categories, setCategories] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -23,7 +25,7 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
       setAmount("");
       setCategoryId("");
       setDescription("");
-      setDate(new Date().toISOString().split("T")[0]);
+      setDate(todayLocal());
       loadCategories();
     }
   }, [open]);
@@ -38,9 +40,9 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
   const filteredCats = categories.filter((c) => c.type === type);
 
   async function handleSave() {
-    const amt = parseFloat(amount);
-    if (!amt || amt <= 0) {
-      toast({ title: "Enter an amount", variant: "destructive" });
+    const amt = parseAmount(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      toast({ title: "Inserisci un importo", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -58,9 +60,9 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
       });
       window.dispatchEvent(new CustomEvent("expense-added"));
       onOpenChange(false);
-      toast({ title: type === "income" ? "Income added" : "Expense added" });
+      toast({ title: type === "income" ? "Entrata aggiunta" : "Spesa aggiunta" });
     } catch (e) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Errore", description: e.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -70,7 +72,7 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[88vh]">
         <DrawerHeader className="pb-0">
-          <DrawerTitle>Add {type === "income" ? "income" : "expense"}</DrawerTitle>
+          <DrawerTitle>{type === "income" ? "Nuova entrata" : "Nuova spesa"}</DrawerTitle>
         </DrawerHeader>
         <div className="px-4 pb-6 pt-2 overflow-y-auto space-y-4">
           <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl">
@@ -84,7 +86,7 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
                 setCategoryId("");
               }}
             >
-              Expense
+              Spesa
             </button>
             <button
               className={cn(
@@ -96,7 +98,7 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
                 setCategoryId("");
               }}
             >
-              Income
+              Entrata
             </button>
           </div>
 
@@ -104,23 +106,23 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
             <div className="flex items-center justify-center gap-1">
               <span className="text-3xl font-bold text-muted-foreground">€</span>
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="0.01"
+                autoComplete="off"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
+                placeholder="0,00"
                 className="text-4xl font-bold bg-transparent border-none outline-none text-center w-44 placeholder:text-muted-foreground/40"
               />
             </div>
           </div>
 
           <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">Category</p>
+            <p className="text-sm font-medium text-muted-foreground mb-2">Categoria</p>
             <div className="grid grid-cols-4 gap-2">
               {filteredCats.length === 0 ? (
                 <p className="text-sm text-muted-foreground col-span-4 text-center py-2">
-                  No categories yet. Add some from the Categories page.
+                  Nessuna categoria. Creane una dalla pagina Categorie (in Altro).
                 </p>
               ) : (
                 filteredCats.map((c) => (
@@ -148,13 +150,13 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
           <Input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Description (optional)"
+            placeholder="Descrizione (facoltativa)"
           />
 
           <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
 
           <Button onClick={handleSave} disabled={saving} className="w-full h-12 text-base">
-            {saving ? "Saving..." : `Add ${type === "income" ? "income" : "expense"}`}
+            {saving ? "Salvataggio..." : type === "income" ? "Aggiungi entrata" : "Aggiungi spesa"}
           </Button>
         </div>
       </DrawerContent>
