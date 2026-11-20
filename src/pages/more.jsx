@@ -7,11 +7,14 @@ import { useToast } from '@/components/ui/use-toast';
 import { exportLocalData, importLocalData } from '@/api/localDataClient';
 import { resetBudgetMonthMarkers } from '@/lib/budgetActions';
 import { Capacitor } from '@capacitor/core';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import { todayLocal } from '@/lib/date';
 
 export default function More() {
   const { toast } = useToast();
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  const [pendingFile, setPendingFile] = useState(null);
   const items = [
     { to: '/recurring', icon: Repeat, label: 'Spese ricorrenti', desc: 'Affitto, abbonamenti e altre spese fisse' },
     { to: '/categories', icon: Tags, label: 'Categorie', desc: 'Gestisci le tue categorie' },
@@ -23,7 +26,7 @@ export default function More() {
     try {
       const backupData = await exportLocalData();
       const content = JSON.stringify(backupData, null, 2);
-      const filename = `app-budget-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const filename = `app-budget-backup-${todayLocal()}.json`;
       if (Capacitor.isNativePlatform()) {
         const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem');
         const { Share } = await import('@capacitor/share');
@@ -46,11 +49,13 @@ export default function More() {
     }
   }
 
-  async function restore(event) {
+  function chooseRestoreFile(event) {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file) return;
-    if (!window.confirm('Ripristinare questo backup? I dati attuali verranno sostituiti.')) return;
+    if (file) setPendingFile(file);
+  }
+
+  async function restore(file) {
     setBusy(true);
     try {
       const data = JSON.parse(await file.text());
@@ -84,8 +89,16 @@ export default function More() {
         <p className="text-sm text-muted-foreground">I tuoi dati sono salvati solo su questo dispositivo. Esporta un backup regolarmente e conservane una copia al sicuro: se disinstalli l'app o perdi il telefono, senza backup i dati vanno persi.</p>
         <Button className="w-full gap-2" onClick={backup} disabled={busy}><Download className="w-4 h-4" /> Esporta backup</Button>
         <Button className="w-full gap-2" variant="outline" onClick={() => fileRef.current?.click()} disabled={busy}><Upload className="w-4 h-4" /> Ripristina backup</Button>
-        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={restore} />
+        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={chooseRestoreFile} />
       </Card>
+      <ConfirmDialog
+        open={!!pendingFile}
+        onOpenChange={(open) => !open && setPendingFile(null)}
+        title="Ripristinare questo backup?"
+        description={pendingFile ? `Tutti i dati attuali verranno sostituiti con quelli di "${pendingFile.name}". L'operazione non si può annullare.` : ''}
+        confirmLabel="Ripristina"
+        onConfirm={() => restore(pendingFile)}
+      />
     </div>
   );
 }
