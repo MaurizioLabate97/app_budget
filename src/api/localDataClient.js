@@ -16,6 +16,7 @@ const TABLES = {
   Category: 'categories',
   Budget: 'budgets',
   BankAccount: 'bank_accounts',
+  RecurringTransaction: 'recurring_transactions',
 };
 
 const ENTITY_NAMES = Object.keys(TABLES);
@@ -34,6 +35,11 @@ const DEFAULTS = {
   },
   Budget: {},
   BankAccount: {},
+  RecurringTransaction: {
+    frequency: 'monthly',
+    active: true,
+    skipped_periods: [],
+  },
 };
 
 let sqliteDbPromise;
@@ -116,6 +122,13 @@ async function getSqliteDb() {
         );
 
         CREATE TABLE IF NOT EXISTS bank_accounts (
+          id TEXT PRIMARY KEY NOT NULL,
+          data_json TEXT NOT NULL,
+          created_date TEXT NOT NULL,
+          updated_date TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS recurring_transactions (
           id TEXT PRIMARY KEY NOT NULL,
           data_json TEXT NOT NULL,
           created_date TEXT NOT NULL,
@@ -440,7 +453,7 @@ function buildEntity(entityName) {
         const now = new Date().toISOString();
 
         const item = {
-          ...DEFAULTS[entityName],
+          ...structuredClone(DEFAULTS[entityName]),
           ...payload,
           id: payload.id || uid(),
           created_date: now,
@@ -656,19 +669,27 @@ export const localData = {
 };
 
 /**
- * Quante transazioni e quanti budget usano una categoria.
+ * Quante transazioni, budget e spese ricorrenti usano una categoria.
  * Serve a mostrare l'impatto prima dell'eliminazione.
  */
 export async function getCategoryUsage(categoryId) {
-  const [transactions, budgets] = await Promise.all([
+  const [transactions, budgets, recurrings] = await Promise.all([
     readAll('Transaction'),
     readAll('Budget'),
+    readAll('RecurringTransaction'),
   ]);
 
   return {
     transactions: transactions.filter((t) => t.category_id === categoryId).length,
     budgets: budgets.filter((b) => b.category_id === categoryId).length,
+    recurrings: recurrings.filter((r) => r.category_id === categoryId).length,
   };
+}
+
+function withoutCategory(item, now) {
+  const { category_id: _categoryId, category_name: _categoryName, ...rest } = item;
+
+  return { ...rest, updated_date: now };
 }
 
 function uncategorize(transaction, now) {
@@ -680,7 +701,8 @@ function uncategorize(transaction, now) {
 /**
  * Elimina una categoria in modo consistente:
  * - le transazioni collegate restano, ma diventano "senza categoria";
- * - i budget collegati vengono eliminati.
+ * - i budget collegati vengono eliminati;
+ * - le spese ricorrenti collegate restano, ma senza categoria.
  * Su SQLite avviene tutto in un'unica transazione.
  */
 export async function deleteCategoryCascade(categoryId) {
@@ -691,6 +713,9 @@ export async function deleteCategoryCascade(categoryId) {
     );
     const affectedBudgets = (await readAll('Budget')).filter(
       (b) => b.category_id === categoryId
+    );
+    const affectedRecurrings = (await readAll('RecurringTransaction')).filter(
+      (r) => r.category_id === categoryId
     );
 
     const db = await getSqliteDb();
@@ -711,6 +736,16 @@ export async function deleteCategoryCascade(categoryId) {
 
         for (const budget of affectedBudgets) {
           await db.run(`DELETE FROM budgets WHERE id = ?`, [budget.id], false);
+        }
+
+        for (const recurring of affectedRecurrings) {
+          const updated = withoutCategory(recurring, now);
+
+          await db.run(
+            `UPDATE recurring_transactions SET data_json = ?, updated_date = ? WHERE id = ?`,
+            [JSON.stringify(updated), now, recurring.id],
+            false
+          );
         }
 
         await db.run(`DELETE FROM categories WHERE id = ?`, [categoryId], false);
@@ -734,6 +769,9 @@ export async function deleteCategoryCascade(categoryId) {
       store.budgets = (store.budgets || []).filter(
         (b) => b.category_id !== categoryId
       );
+      store.recurring_transactions = (store.recurring_transactions || []).map((r) =>
+        r.category_id === categoryId ? withoutCategory(r, now) : r
+      );
       store.categories = (store.categories || []).filter(
         (c) => c.id !== categoryId
       );
@@ -744,6 +782,7 @@ export async function deleteCategoryCascade(categoryId) {
     return {
       transactions: affectedTransactions.length,
       budgets: affectedBudgets.length,
+      recurrings: affectedRecurrings.length,
     };
   });
 

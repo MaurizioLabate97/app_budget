@@ -69,9 +69,16 @@ export default function Categories() {
         `${usage.budgets} ${usage.budgets === 1 ? "budget verrà eliminato" : "budget verranno eliminati"}`
       );
     }
+    if (usage.recurrings > 0) {
+      parts.push(
+        `${usage.recurrings} ${usage.recurrings === 1 ? "spesa ricorrente resterà" : "spese ricorrenti resteranno"} senza categoria`
+      );
+    }
+    const list =
+      parts.length > 1 ? `${parts.slice(0, -1).join(", ")} e ${parts.at(-1)}` : parts[0];
     return parts.length
-      ? `La categoria "${category.name}" è in uso: ${parts.join(" e ")}.`
-      : `La categoria "${category.name}" non è usata da nessuna transazione o budget.`;
+      ? `La categoria "${category.name}" è in uso: ${list}.`
+      : `La categoria "${category.name}" non è usata da nessuna transazione, budget o spesa ricorrente.`;
   }
 
   async function handleDelete(cat) {
