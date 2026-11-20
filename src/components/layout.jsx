@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Outlet } from "react-router-dom";
 import BottomNav from "./BottomNav";
 import AddExpenseSheet from "./AddExpenseSheet";
+import BudgetOnboarding from "./budget/budgetonboarding";
 
 export default function Layout() {
   const [addOpen, setAddOpen] = useState(false);
@@ -19,6 +20,8 @@ export default function Layout() {
         open={addOpen}
         onOpenChange={setAddOpen}
       />
+
+      <BudgetOnboarding />
     </div>
   );
 }

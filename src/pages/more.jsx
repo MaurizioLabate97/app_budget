@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { exportLocalData, importLocalData } from '@/api/localDataClient';
+import { resetBudgetMonthMarkers } from '@/lib/budgetActions';
 import { Capacitor } from '@capacitor/core';
 
 export default function More() {
@@ -54,6 +55,7 @@ export default function More() {
     try {
       const data = JSON.parse(await file.text());
       await importLocalData(data);
+      resetBudgetMonthMarkers();
       toast({ title: 'Backup ripristinato', description: 'I dati locali sono stati sostituiti con quelli del backup.' });
       window.location.reload();
     } catch (error) {
