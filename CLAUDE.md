@@ -45,6 +45,7 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 - UI in italiano con formati `it-IT`.
 - Importi con la virgola.
 - `package.json` ripulito: da 67 a 22 dipendenze, tolta anche `nitro`. Config di ESLint e jsconfig corrette.
+- Budget ricorrenti (20/11/2026): ogni mese si ripropongono le voci "Ogni mese" dell'ultimo mese con budget (`src/lib/budgets.js` + `budgetActions.js`, testati); voci "Solo questo mese" (`Budget.recurring: false`); pagina Budget "tocca e regola" con − / + (passo 10 €) e importo scrivibile a mano; pannello "Nuova voce" (crea la categoria se non c'è, blocca i doppioni per categoria e mese); popup al primo avvio con Mutuo, Alcol e Spesa. I mesi già preparati sono segnati in localStorage (`app_budget_budget_months_v1`, azzerato dopo un restore). Design in `docs/superpowers/specs/2026-11-20-budget-ricorrenti-design.md`.
 - Spese ricorrenti (19/11/2026): entità `RecurringTransaction`, scadenze calcolate da `src/lib/recurring.js` (testato con Vitest, `npm test`), riquadro "Da confermare" in Dashboard (Conferma / Salta), pagina Altro → Spese ricorrenti (`/recurring`). Design in `docs/superpowers/specs/2026-11-19-spese-ricorrenti-design.md`.
 - Pulizia fase 2 (19/11/2026): rimossi componenti, hooks e utils inutilizzati e i componenti shadcn non usati. In `src/components/ui/` restano solo alert-dialog, button, card, dialog, drawer, input, label, popover, select, toast, toaster e use-toast. Il lint passa senza errori né warning.
 
@@ -56,8 +57,8 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 **Roadmap:**
 - **Fase 3, feature:**
   1. ~~Spese ricorrenti~~ (fatto).
-  2. Budget ricorrenti oppure "copia dal mese precedente", senza duplicati per categoria e mese.
-  3. Categorie di default al primo avvio.
+  2. ~~Budget ricorrenti~~ (fatto).
+  3. ~~Categorie di default al primo avvio~~ (fatto con il popup dei budget).
   4. Paginazione: oggi le transazioni sono limitate a 100.
   5. Statistiche e grafici di trend.
   6. Ricerca anche sull'esercente.
@@ -77,7 +78,7 @@ Analisi completa iniziale: documento `claude/analisi-app-budget.md` nel Progetto
 - `npm install`
 - `npm run dev`: server Vite, raggiungibile anche dall'iPhone in LAN
 - `npm run build`
-- `npm test`: test Vitest (logica delle scadenze)
+- `npm test`: test Vitest (scadenze ricorrenti e riporto dei budget)
 - `npm run lint` / `npm run lint:fix`
 - `npm run cap:sync`: build più `cap sync`
 - `npm run ios` (serve macOS) / `npm run android`
