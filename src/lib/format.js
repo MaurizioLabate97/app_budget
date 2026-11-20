@@ -9,6 +9,13 @@ export function formatCurrency(amount, currency = "EUR") {
   }).format(amount || 0);
 }
 
+/** "2026-03-05" → "5/3/2026" (o "5/3" con withYear = false), senza passare da Date. */
+export function formatDayMonth(dateStr, withYear = true) {
+  const [y, m, d] = (dateStr || "").split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return withYear ? `${d}/${m}/${y}` : `${d}/${m}`;
+}
+
 export function monthLabel(ym) {
   const key = (ym || "").substring(0, 7);
   const [y, m] = key.split("-");

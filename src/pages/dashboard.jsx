@@ -13,6 +13,7 @@ import CategoryPieChart from "@/components/charts/categorypiechart";
 import { formatCurrency, MONTH_NAMES } from "@/lib/format";
 import TransactionRow from "@/components/transactions/transactionrow";
 import AddTransactionDialog from "@/components/transactions/addtransactiondialog";
+import DueOccurrences from "@/components/recurring/dueoccurrences";
 import { getMonthRange } from "@/lib/date";
 
 function getCurrentMonthKey() {
@@ -215,6 +216,9 @@ export default function Dashboard() {
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
+
+      {/* Spese ricorrenti da confermare */}
+      <DueOccurrences />
 
       {/* Saldo mensile */}
       <div className="min-w-0 pt-1">

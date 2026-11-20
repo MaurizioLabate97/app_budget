@@ -10,6 +10,7 @@ import Categories from './pages/categories';
 import Budgets from './pages/budgets';
 import BankAccounts from './pages/bankaccount';
 import More from './pages/more';
+import Recurring from './pages/recurring';
 import PageNotFound from './lib/pagenotfound';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/budgets" element={<Budgets />} />
             <Route path="/bank" element={<BankAccounts />} />
             <Route path="/more" element={<More />} />
+            <Route path="/recurring" element={<Recurring />} />
             <Route path="*" element={<PageNotFound />} />
           </Route>
         </Routes>
