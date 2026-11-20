@@ -45,6 +45,7 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 - UI in italiano con formati `it-IT`.
 - Importi con la virgola.
 - `package.json` ripulito: da 67 a 22 dipendenze, tolta anche `nitro`. Config di ESLint e jsconfig corrette.
+- Spese ricorrenti (19/11/2026): entità `RecurringTransaction`, scadenze calcolate da `src/lib/recurring.js` (testato con Vitest, `npm test`), riquadro "Da confermare" in Dashboard (Conferma / Salta), pagina Altro → Spese ricorrenti (`/recurring`). Design in `docs/superpowers/specs/2026-11-19-spese-ricorrenti-design.md`.
 - Pulizia fase 2 (19/11/2026): rimossi componenti, hooks e utils inutilizzati e i componenti shadcn non usati. In `src/components/ui/` restano solo alert-dialog, button, card, dialog, drawer, input, label, popover, select, toast, toaster e use-toast. Il lint passa senza errori né warning.
 
 **Note:**
@@ -54,7 +55,7 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 
 **Roadmap:**
 - **Fase 3, feature:**
-  1. **Spese ricorrenti**: è la priorità.
+  1. ~~Spese ricorrenti~~ (fatto).
   2. Budget ricorrenti oppure "copia dal mese precedente", senza duplicati per categoria e mese.
   3. Categorie di default al primo avvio.
   4. Paginazione: oggi le transazioni sono limitate a 100.
@@ -64,6 +65,11 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 - **Fase 4, data layer:** passare a React Query (già installato ma inutilizzato) al posto degli eventi window; colonne indicizzate (`date`, `type`, `category_id`); versioning dello schema con migrazioni.
 - **Altro:** toggle per la dark mode; valutare `allowBackup` e il permesso `INTERNET` su Android.
 
+**Evolutive da mostrare all'utente a fine progetto** (non proporle prima):
+- Import dell'estratto conto CSV a fine mese, con confronto nell'app (stesso importo, data entro 2-3 giorni): propone solo le spese mancanti, con esercente precompilato e categoria dedotta dalle `keywords`. Serve un CSV di esempio della banca. L'inserimento manuale quotidiano resta il metodo principale.
+- Comandi Rapidi iOS + Apple Wallet: l'automazione "Transazione" apre l'app con importo ed esercente già compilati. Vale solo per i pagamenti con Apple Pay e richiede la build nativa con uno schema URL. Dettagli da verificare.
+- Scartato: open banking PSD2, perché richiede un backend o un aggregatore.
+
 Analisi completa iniziale: documento `claude/analisi-app-budget.md` nel Progetto "App Budget" su claude.ai.
 
 ## Comandi
@@ -71,6 +77,7 @@ Analisi completa iniziale: documento `claude/analisi-app-budget.md` nel Progetto
 - `npm install`
 - `npm run dev`: server Vite, raggiungibile anche dall'iPhone in LAN
 - `npm run build`
+- `npm test`: test Vitest (logica delle scadenze)
 - `npm run lint` / `npm run lint:fix`
 - `npm run cap:sync`: build più `cap sync`
 - `npm run ios` (serve macOS) / `npm run android`
