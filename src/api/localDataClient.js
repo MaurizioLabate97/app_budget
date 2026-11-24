@@ -8,9 +8,17 @@
  */
 import { Capacitor } from '@capacitor/core';
 import { matches } from '@/lib/query';
+import {
+  SCHEMA_VERSION,
+  migrateData,
+  pendingMigrations,
+  readVersion,
+} from '@/lib/migrations';
 
 const DB_NAME = 'app_budget_local';
 const STORE_KEY = 'app_budget_local_store_v1';
+// Copia dello store prima dell'ultima migrazione (solo browser), per sicurezza.
+const PREMIGRATION_KEY = 'app_budget_local_store_premigration';
 
 const TABLES = {
   Transaction: 'transactions',
@@ -143,6 +151,8 @@ async function getSqliteDb() {
         ON categories(created_date);
       `);
 
+      await migrateSqlite(db);
+
       return db;
     })();
 
@@ -156,17 +166,134 @@ async function getSqliteDb() {
   return sqliteDbPromise;
 }
 
+function parseRow(row) {
+  return {
+    ...JSON.parse(row.data_json),
+    created_date: row.created_date,
+    updated_date: row.updated_date,
+  };
+}
+
+/**
+ * Porta il database SQLite alla versione corrente, una migrazione alla volta,
+ * tutto in un'unica transazione. La versione sta in `PRAGMA user_version`
+ * (0 = database creato prima del versioning, cioè versione 1).
+ * Usa `db` direttamente: qui getSqliteDb() non ha ancora finito.
+ */
+async function migrateSqlite(db) {
+  const res = await db.query('PRAGMA user_version');
+  let version = readVersion(res.values?.[0]?.user_version);
+  const pending = pendingMigrations(version);
+
+  if (!pending.length) return;
+
+  await db.beginTransaction();
+
+  try {
+    for (const migration of pending) {
+      for (const statement of migration.sql ?? []) {
+        await db.execute(statement, false);
+      }
+
+      if (migration.up) {
+        const data = {};
+
+        for (const [entityName, table] of Object.entries(TABLES)) {
+          const rows = await db.query(
+            `SELECT data_json, created_date, updated_date FROM ${table}`
+          );
+          data[entityName] = (rows.values || []).map(parseRow);
+        }
+
+        const result = migrateData(data, version, migration.version);
+
+        for (const [entityName, table] of Object.entries(TABLES)) {
+          for (const item of result.data[entityName]) {
+            if (!result.changedIds[entityName].has(item.id)) continue;
+
+            // Solo data_json: è un aggiornamento dei dati, non una modifica dell'utente.
+            await db.run(
+              `UPDATE ${table} SET data_json = ? WHERE id = ?`,
+              [JSON.stringify(item), item.id],
+              false
+            );
+          }
+        }
+      }
+
+      version = migration.version;
+    }
+
+    await db.execute(`PRAGMA user_version = ${version}`, false);
+    await db.commitTransaction();
+  } catch (error) {
+    try {
+      await db.rollbackTransaction();
+    } catch (rollbackError) {
+      console.error('Errore durante il rollback SQLite:', rollbackError);
+    }
+
+    throw new Error(`Aggiornamento dei dati non riuscito: ${error.message}`);
+  }
+}
+
+/**
+ * Legge lo store del browser e, se serve, lo porta alla versione corrente
+ * con una sola scrittura. Prima salva una copia dei dati vecchi, se c'è spazio.
+ */
+function loadBrowserStore() {
+  let raw;
+
+  try {
+    raw = localStorage.getItem(STORE_KEY);
+  } catch {
+    raw = null;
+  }
+
+  if (!raw) return { schema_version: SCHEMA_VERSION };
+
+  let store;
+
+  try {
+    store = JSON.parse(raw);
+  } catch {
+    return { schema_version: SCHEMA_VERSION };
+  }
+
+  const version = readVersion(store.schema_version);
+  const data = Object.fromEntries(
+    Object.entries(TABLES).map(([entityName, table]) => [entityName, store[table] || []])
+  );
+  const result = migrateData(data, version);
+
+  if (!result.changed) return store;
+
+  const migrated = { ...store, schema_version: result.version };
+
+  for (const [entityName, table] of Object.entries(TABLES)) {
+    migrated[table] = result.data[entityName];
+  }
+
+  try {
+    localStorage.setItem(PREMIGRATION_KEY, raw);
+  } catch {
+    // Spazio esaurito: si migra lo stesso, la scrittura sotto resta unica.
+  }
+
+  localStorage.setItem(STORE_KEY, JSON.stringify(migrated));
+
+  return migrated;
+}
+
 async function getBrowserStore() {
   if (!memoryStorePromise) {
-    memoryStorePromise = Promise.resolve().then(() => {
-      try {
-        return JSON.parse(
-          localStorage.getItem(STORE_KEY) || '{}'
-        );
-      } catch {
-        return {};
-      }
-    });
+    memoryStorePromise = Promise.resolve()
+      .then(loadBrowserStore)
+      .catch((error) => {
+        // Un errore (es. dati di una versione più recente) si ripresenta al prossimo accesso.
+        memoryStorePromise = undefined;
+        throw error;
+      });
   }
 
   return memoryStorePromise;
@@ -195,11 +322,7 @@ async function readAll(entityName) {
       `SELECT data_json, created_date, updated_date FROM ${table}`
     );
 
-    return (result.values || []).map((row) => ({
-      ...JSON.parse(row.data_json),
-      created_date: row.created_date,
-      updated_date: row.updated_date,
-    }));
+    return (result.values || []).map(parseRow);
   }
 
   const store = await getBrowserStore();
@@ -223,11 +346,7 @@ async function readOne(entityName, id) {
 
     if (!row) return null;
 
-    return {
-      ...JSON.parse(row.data_json),
-      created_date: row.created_date,
-      updated_date: row.updated_date,
-    };
+    return parseRow(row);
   }
 
   const store = await getBrowserStore();
@@ -757,7 +876,7 @@ export async function deleteCategoryCascade(categoryId) {
 export async function exportLocalData() {
   const output = {
     format: 'app-budget-local-backup',
-    version: 1,
+    version: SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     data: {},
   };
@@ -770,7 +889,9 @@ export async function exportLocalData() {
 }
 
 export async function importLocalData(backup) {
-  const normalizedData = validateBackup(backup);
+  // Un backup vecchio si porta alla versione corrente prima di sostituire i dati.
+  const version = readVersion(backup?.version);
+  const normalizedData = migrateData(validateBackup(backup), version).data;
 
   await serializeWrite(
     () => replaceAllData(normalizedData)
