@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { CategoryIcon } from "@/components/categoryicon";
 import CategoryDialog from "@/components/categories/categorydialog";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { isFixedCategory } from "@/lib/stats";
 
 export default function Categories() {
   const { toast } = useToast();
@@ -124,8 +125,13 @@ export default function Categories() {
                 />
               </div>
 
-              <span className="font-medium flex-1 min-w-0 truncate">
-                {c.name}
+              <span className="font-medium flex-1 min-w-0 flex items-center gap-1.5">
+                <span className="truncate">{c.name}</span>
+                {c.type === "expense" && isFixedCategory(c) && (
+                  <span className="shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    fissa
+                  </span>
+                )}
               </span>
 
               <Button

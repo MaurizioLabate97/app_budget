@@ -21,6 +21,7 @@ import { CategoryIcon, ICON_NAMES } from "@/components/categoryicon";
 import { localData } from "@/api/localDataClient";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
+import { isFixedCategory } from "@/lib/stats";
 
 const COLORS = [
   "#6366f1",
@@ -54,6 +55,8 @@ export default function CategoryDialog({
   const [color, setColor] = useState("#6366f1");
   const [icon, setIcon] = useState("Tag");
   const [saving, setSaving] = useState(false);
+  // null = segue il nome (o il flag già salvato) finché l'utente non tocca l'interruttore.
+  const [fixedChoice, setFixedChoice] = useState(null);
 
   useEffect(() => {
     if (open) {
@@ -61,8 +64,12 @@ export default function CategoryDialog({
       setType(category?.type || "expense");
       setColor(category?.color || getRandomColor());
       setIcon(category?.icon || "Tag");
+      setFixedChoice(null);
     }
   }, [open, category]);
+
+  const fixed = fixedChoice ?? isFixedCategory({ ...category, name });
+  const fixedField = type === "expense" ? { fixed } : {};
 
   async function handleSave() {
     if (!name.trim()) {
@@ -82,6 +89,7 @@ export default function CategoryDialog({
           type,
           color,
           icon,
+          ...fixedField,
         });
       } else {
         await localData.entities.Category.create({
@@ -90,6 +98,7 @@ export default function CategoryDialog({
           color,
           icon,
           keywords: [],
+          ...fixedField,
         });
       }
 
@@ -141,6 +150,35 @@ export default function CategoryDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {type === "expense" && (
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p id="fixed-label" className="text-sm font-medium">Spesa fissa</p>
+                <p className="text-xs text-muted-foreground">
+                  Le spese fisse non compaiono nella classifica delle statistiche
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={fixed}
+                aria-labelledby="fixed-label"
+                onClick={() => setFixedChoice(!fixed)}
+                className={cn(
+                  "relative h-7 w-12 shrink-0 rounded-full transition-colors",
+                  fixed ? "bg-primary" : "bg-muted"
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-background shadow-sm transition-transform",
+                    fixed && "translate-x-5"
+                  )}
+                />
+              </button>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Colore</Label>
