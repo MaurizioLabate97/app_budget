@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { BellRing, Check, SkipForward } from "lucide-react";
 
 import { localData } from "@/api/localDataClient";
@@ -19,11 +19,14 @@ export default function DueOccurrences() {
   const { toast } = useToast();
   const [busy, setBusy] = useState(() => new Set());
   // Scadenze appena confermate o saltate: spariscono subito, senza aspettare il ricaricamento.
-  const [done, setDone] = useState(() => new Set());
+  // Valgono solo per i dati di quel momento: con dati nuovi decide di nuovo getDueOccurrences
+  // (es. se il movimento confermato viene eliminato, la scadenza ricompare).
+  const [done, setDone] = useState(() => new Map());
   // Guardia sincrona contro il doppio tocco (lo stato React si aggiorna dopo).
   const inFlight = useRef(new Set());
   // Le azioni girano una alla volta, così ognuna legge i dati già aggiornati.
   const queue = useRef(Promise.resolve());
+  const stampRef = useRef("");
 
   // Se l'app resta aperta oltre la mezzanotte, le scadenze del nuovo giorno
   // compaiono quando torna in primo piano.
@@ -31,12 +34,17 @@ export default function DueOccurrences() {
   const recurringQuery = useEntityFilter("RecurringTransaction");
   const confirmedQuery = useEntityFilter("Transaction", { source: "recurring" });
 
+  const stamp = `${recurringQuery.dataUpdatedAt}:${confirmedQuery.dataUpdatedAt}`;
+  // L'azione finisce dopo il render: serve il timbro dei dati più recenti, non quello del tocco.
+  useEffect(() => {
+    stampRef.current = stamp;
+  }, [stamp]);
   const due = useMemo(() => {
     if (!recurringQuery.data || !confirmedQuery.data) return [];
     return getDueOccurrences(recurringQuery.data.items, confirmedQuery.data.items, today).filter(
-      (o) => !done.has(keyOf(o))
+      (o) => done.get(keyOf(o)) !== stamp
     );
-  }, [recurringQuery.data, confirmedQuery.data, today, done]);
+  }, [recurringQuery.data, confirmedQuery.data, today, done, stamp]);
 
   function run(occurrence, action) {
     const key = keyOf(occurrence);
@@ -48,7 +56,7 @@ export default function DueOccurrences() {
     queue.current = queue.current.then(async () => {
       try {
         await action();
-        setDone((set) => new Set(set).add(key));
+        setDone((map) => new Map(map).set(key, stampRef.current));
       } catch (e) {
         toast({ title: "Errore", description: e.message, variant: "destructive" });
       } finally {

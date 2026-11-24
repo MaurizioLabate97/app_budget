@@ -24,10 +24,11 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 ## Architettura
 
 - `src/api/localDataClient.js` è l'**unico data layer**, con un'API stile `localData.entities.X.list/filter/get/create/update/delete/aggregate`.
-  - Nativo: `@capacitor-community/sqlite`, ogni record salvato come blob `data_json`; filtri e aggregazioni in JS.
+  - Nativo: `@capacitor-community/sqlite`, ogni record salvato come blob `data_json`; filtri e aggregazioni in JS. Le transazioni hanno anche le colonne indicizzate `date`, `type`, `category_id` (da tenere allineate a `data_json` su ogni scrittura): `filter`/`aggregate` pre-filtrano in SQL con `buildSqlWhere` (`src/lib/sqlWhere.js`) e poi applicano comunque l'intera query in JS.
   - Browser: tutto lo store in un'unica chiave localStorage (`STORE_KEY`).
   - Le scritture sono serializzate da `serializeWrite`. **Non chiamare metodi delle entity dentro `serializeWrite`**, finisce in deadlock.
-  - Dopo ogni scrittura parte l'evento `expense-added`, che le pagine ascoltano per ricaricarsi.
+  - **Schema versionato** (`src/lib/migrations.js`): versione in `PRAGMA user_version` (SQLite), `store.schema_version` (browser) e `backup.version`; se manca vale 1. Le migrazioni girano una volta, in ordine e in modo atomico all'apertura dei dati e sui backup importati; i dati di una versione più recente vengono rifiutati. **Una modifica alla forma dei dati va sempre aggiunta in coda a `MIGRATIONS`**, mai fatta a mano. Le migrazioni SQLite sono testate su SQLite vero con `sql.js` (solo dev).
+  - **Letture con React Query:** dopo ogni scrittura il data layer avvisa chi è iscritto con `subscribeDataChanged`; `src/lib/query-client.js` invalida le chiavi `["entity", nome]` (tutto dopo un restore). Le pagine leggono con gli hook di `src/hooks/useLocalData.js` (`useEntityFilter`, `useEntityAggregate`, `useToday`); `staleTime: Infinity`, quindi **ogni modifica ai dati deve passare dal data layer**. Le scritture restano chiamate dirette a `localData`.
   - Funzioni extra: `exportLocalData` / `importLocalData` (backup JSON), `getCategoryUsage`, `deleteCategoryCascade` (transazioni rese "senza categoria" e budget eliminati, tutto in un'unica transazione SQLite).
 - Entità: `Transaction`, `Category`, `Budget`, `BankAccount` (quest'ultima non usata).
 - **Date:** le date sono stringhe `YYYY-MM-DD` locali. Usa sempre gli helper di `src/lib/date.js` (`todayLocal`, `toLocalDateString`, `getMonthRange`). **Mai `toISOString()` per ricavare un giorno**: in Italia (UTC+1/+2) restituisce il giorno sbagliato.
@@ -35,7 +36,7 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 - **Eliminazioni:** chiedono sempre conferma con `src/components/ConfirmDialog.jsx`, non con `window.confirm`.
 - Pagine in `src/pages/`: dashboard, stats, transactions (in UI "Movimenti"), budgets, categories, more (backup/restore), bankaccount (placeholder).
 
-## Stato (aggiornato al 19/11/2026)
+## Stato (aggiornato al 24/11/2026)
 
 **Fatto:**
 - Restore dei backup sistemato (prima era rotto su nativo e su web).
@@ -49,6 +50,7 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 - Spese ricorrenti (19/11/2026): entità `RecurringTransaction`, scadenze calcolate da `src/lib/recurring.js` (testato con Vitest, `npm test`), riquadro "Da confermare" in Dashboard (Conferma / Salta), pagina Altro → Spese ricorrenti (`/recurring`). Design in `docs/superpowers/specs/2026-11-19-spese-ricorrenti-design.md`.
 - Statistiche (24/11/2026): pagina `/stats` (da Altro e da Home) con la classifica delle categorie di spesa non fisse su 3/6/12 mesi, media al mese, confronto col periodo prima e dettaglio mese per mese. Calcoli puri in `src/lib/stats.js` (testati). Flag facoltativo `Category.fixed` ("Spesa fissa" nel dialog della categoria); se manca vale la regola sul nome (mutuo, affitto, bollette, luce, gas, acqua, condominio). Design in `docs/superpowers/specs/2026-11-24-statistiche-design.md`.
 - Pulizia fase 2 (19/11/2026): rimossi componenti, hooks e utils inutilizzati e i componenti shadcn non usati. In `src/components/ui/` restano solo alert-dialog, button, card, dialog, drawer, input, label, popover, select, toast, toaster e use-toast. Il lint passa senza errori né warning.
+- Fase 4, data layer (24/11/2026): schema versionato con migrazioni (v2 converte in numeri gli importi salvati come testo, v3 aggiunge le colonne indicizzate su SQLite), React Query al posto degli eventi `expense-added` (tornando su una pagina già vista i dati sono subito pronti). Il ramo SQLite è verificato solo con i test su `sql.js`, non ancora su un telefono.
 
 **Note:**
 - `src/components/charts/balance.jsx` e `monthlytrendchart.jsx` non sono usati, ma vanno **tenuti** per le statistiche.
@@ -64,8 +66,9 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
   5. ~~Statistiche e grafici di trend~~ (fatto: pagina Statistiche "dove spendi di più").
   6. ~~Ricerca anche sull'esercente~~ (fatto: cerca in esercente, descrizione e categoria mentre scrivi).
   7. ~~Riga transazione meno affollata su mobile~~ (fatto: tocca la riga per modificare, chip categoria, Elimina nella modifica).
-- **Fase 4, data layer:** passare a React Query (già installato ma inutilizzato) al posto degli eventi window; colonne indicizzate (`date`, `type`, `category_id`); versioning dello schema con migrazioni.
-- **Altro:** toggle per la dark mode; valutare `allowBackup` e il permesso `INTERNET` su Android.
+- ~~**Fase 4, data layer:**~~ (fatto il 24/11/2026: React Query, colonne indicizzate, migrazioni). Design in `docs/superpowers/specs/2026-11-24-fase4-data-layer-design.md`.
+- **Prossimo:** build nativa di prova (in ritardo: serve a verificare SQLite, migrazioni e colonne indicizzate sul telefono).
+- **Rifiniture finali** (l'utente le vuole alla fine, dopo la fase 4): toggle per la dark mode; bundle oltre 500 kB; `npm audit`; valutare `allowBackup` e il permesso `INTERNET` su Android.
 
 **Evolutive da mostrare all'utente a fine progetto** (non proporle prima):
 - Import dell'estratto conto CSV a fine mese, con confronto nell'app (stesso importo, data entro 2-3 giorni): propone solo le spese mancanti, con esercente precompilato e categoria dedotta dalle `keywords`. Serve un CSV di esempio della banca. L'inserimento manuale quotidiano resta il metodo principale.
@@ -79,7 +82,7 @@ Analisi completa iniziale: documento `claude/analisi-app-budget.md` nel Progetto
 - `npm install`
 - `npm run dev`: server Vite, raggiungibile anche dall'iPhone in LAN
 - `npm run build`
-- `npm test`: test Vitest (scadenze ricorrenti e riporto dei budget)
+- `npm test`: test Vitest (logica pura, migrazioni anche su SQLite via sql.js)
 - `npm run lint` / `npm run lint:fix`
 - `npm run cap:sync`: build più `cap sync`
 - `npm run ios` (serve macOS) / `npm run android`

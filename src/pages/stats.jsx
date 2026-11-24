@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { keepPreviousData } from "@tanstack/react-query";
 
 import StatsRow from "@/components/stats/statsrow";
 import AddTransactionDialog from "@/components/transactions/addtransactiondialog";
@@ -37,7 +38,13 @@ export default function Stats() {
 
   // Servono tutte le spese fino alla fine del periodo: la prima decide il giorno di inizio uso.
   const { end } = periodRange(today, 12);
-  const txQuery = useEntityFilter("Transaction", { type: "expense", date: { $lt: end } });
+  // Al cambio di giorno restano visibili i dati di prima finché arrivano i nuovi.
+  const txQuery = useEntityFilter(
+    "Transaction",
+    { type: "expense", date: { $lt: end } },
+    {},
+    { placeholderData: keepPreviousData }
+  );
   const categoriesQuery = useEntityFilter("Category");
 
   const transactions = useMemo(() => txQuery.data?.items ?? [], [txQuery.data]);

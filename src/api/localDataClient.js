@@ -306,9 +306,49 @@ export async function migrateSqlite(db) {
   }
 }
 
+const QUOTA_MESSAGE =
+  'Spazio esaurito sul dispositivo: esporta un backup ed elimina qualche dato vecchio.';
+
+function isQuotaError(error) {
+  return (
+    error?.name === 'QuotaExceededError' ||
+    error?.code === 22 ||
+    /quota/i.test(error?.message || '')
+  );
+}
+
+/** Salva lo store del browser con una sola scrittura; errore in italiano se manca spazio. */
+function writeStore(store) {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  } catch (error) {
+    throw isQuotaError(error) ? new Error(QUOTA_MESSAGE) : error;
+  }
+}
+
+/**
+ * Applica `changes` (tabella → elenco) allo store del browser: prima su disco,
+ * poi in memoria, così se la scrittura fallisce memoria e disco restano uguali.
+ */
+async function saveBrowserTables(changes) {
+  const store = await getBrowserStore();
+
+  writeStore({ ...store, ...changes });
+  Object.assign(store, changes);
+}
+
+function removePremigrationCopy() {
+  try {
+    localStorage.removeItem(PREMIGRATION_KEY);
+  } catch {
+    // Niente da togliere.
+  }
+}
+
 /**
  * Legge lo store del browser e, se serve, lo porta alla versione corrente
- * con una sola scrittura. Prima salva una copia dei dati vecchi, se c'è spazio.
+ * con una sola scrittura. Prima salva una copia dei dati vecchi, se c'è spazio;
+ * la copia si toglie al primo avvio riuscito dopo la migrazione.
  */
 function loadBrowserStore() {
   let raw;
@@ -335,7 +375,10 @@ function loadBrowserStore() {
   );
   const result = migrateData(data, version);
 
-  if (!result.changed) return store;
+  if (!result.changed) {
+    removePremigrationCopy();
+    return store;
+  }
 
   const migrated = { ...store, schema_version: result.version };
 
@@ -349,7 +392,13 @@ function loadBrowserStore() {
     // Spazio esaurito: si migra lo stesso, la scrittura sotto resta unica.
   }
 
-  localStorage.setItem(STORE_KEY, JSON.stringify(migrated));
+  try {
+    writeStore(migrated);
+  } catch {
+    // La copia ha tolto lo spazio che serviva: si rinuncia alla copia e si riprova.
+    removePremigrationCopy();
+    writeStore(migrated);
+  }
 
   return migrated;
 }
@@ -433,15 +482,7 @@ async function readOne(entityName, id) {
 }
 
 async function persistBrowser(entityName, items) {
-  const table = TABLES[entityName];
-  const store = await getBrowserStore();
-
-  store[table] = items;
-
-  localStorage.setItem(
-    STORE_KEY,
-    JSON.stringify(store)
-  );
+  await saveBrowserTables({ [TABLES[entityName]]: items });
 }
 
 function compareValues(a, b) {
@@ -521,13 +562,11 @@ function validateBackup(backup) {
  */
 async function replaceAllData(data) {
   if (!Capacitor.isNativePlatform()) {
-    const store = await getBrowserStore();
-
-    for (const [entityName, table] of Object.entries(TABLES)) {
-      store[table] = data[entityName] ?? [];
-    }
-
-    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    await saveBrowserTables(
+      Object.fromEntries(
+        Object.entries(TABLES).map(([entityName, table]) => [table, data[entityName] ?? []])
+      )
+    );
     return;
   }
 
@@ -897,20 +936,20 @@ export async function deleteCategoryCascade(categoryId) {
     } else {
       const store = await getBrowserStore();
 
-      store.transactions = (store.transactions || []).map((t) =>
-        t.category_id === categoryId ? uncategorize(t, now) : t
-      );
-      store.budgets = (store.budgets || []).filter(
-        (b) => b.category_id !== categoryId
-      );
-      store.recurring_transactions = (store.recurring_transactions || []).map((r) =>
-        r.category_id === categoryId ? withoutCategory(r, now) : r
-      );
-      store.categories = (store.categories || []).filter(
-        (c) => c.id !== categoryId
-      );
-
-      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+      await saveBrowserTables({
+        transactions: (store.transactions || []).map((t) =>
+          t.category_id === categoryId ? uncategorize(t, now) : t
+        ),
+        budgets: (store.budgets || []).filter(
+          (b) => b.category_id !== categoryId
+        ),
+        recurring_transactions: (store.recurring_transactions || []).map((r) =>
+          r.category_id === categoryId ? withoutCategory(r, now) : r
+        ),
+        categories: (store.categories || []).filter(
+          (c) => c.id !== categoryId
+        ),
+      });
     }
 
     return {
