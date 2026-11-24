@@ -145,15 +145,6 @@ export default function Dashboard() {
     }
   }
 
-  async function handleDelete(tx) {
-    try {
-      await localData.entities.Transaction.delete(tx.id);
-      load(selectedMonth);
-    } catch (error) {
-      console.error("Error deleting transaction:", error);
-    }
-  }
-
   function changeMonth(offset) {
     const [year, month] = selectedMonth.split("-").map(Number);
     const nextDate = new Date(year, month - 1 + offset, 1);
@@ -302,7 +293,6 @@ export default function Dashboard() {
                 transaction={tx}
                 categories={categories}
                 onCategorize={handleCategorize}
-                onDelete={handleDelete}
                 onEdit={setEditingTransaction}
               />
             ))

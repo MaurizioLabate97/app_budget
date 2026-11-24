@@ -18,8 +18,18 @@ export default function CategorySelect({
   current,
   onCategorize,
   type = "expense",
+  open: openProp,
+  onOpenChange,
+  align = "end",
+  children,
 }) {
-  const [open, setOpen] = useState(false);
+  // Aperto/chiuso controllabile dall'esterno (es. anche toccando l'icona della riga).
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (value) => {
+    setOpenState(value);
+    onOpenChange?.(value);
+  };
   const [query, setQuery] = useState("");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -58,6 +68,7 @@ export default function CategorySelect({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
+        {children ?? (
         <Button
           variant={currentCat ? "secondary" : "outline"}
           size="sm"
@@ -83,9 +94,10 @@ export default function CategorySelect({
 
           <ChevronDown className="w-3 h-3 opacity-50" />
         </Button>
+        )}
       </PopoverTrigger>
 
-      <PopoverContent className="w-64 max-w-[calc(100vw-2rem)] p-2" align="end">
+      <PopoverContent className="w-64 max-w-[calc(100vw-2rem)] p-2" align={align}>
         <div className="relative mb-2">
           <Search className="w-3.5 h-3.5 absolute left-2 top-2.5 text-muted-foreground" />
 

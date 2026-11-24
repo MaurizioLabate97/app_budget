@@ -25,7 +25,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { CategoryIcon } from "@/components/categoryicon";
 import { cn } from "@/lib/utils";
 import { todayLocal } from "@/lib/date";
-import { parseAmount, formatAmountInput } from "@/lib/format";
+import { parseAmount, formatAmountInput, formatCurrency, formatDayMonth } from "@/lib/format";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 export default function AddTransactionDialog({
   open,
@@ -43,6 +44,7 @@ export default function AddTransactionDialog({
   const [merchant, setMerchant] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isEditing = !!transaction;
 
@@ -122,6 +124,22 @@ export default function AddTransactionDialog({
       setSaving(false);
     }
   }
+
+  async function handleDelete() {
+    try {
+      await localData.entities.Transaction.delete(transaction.id);
+      onOpenChange(false);
+      toast({ title: "Movimento eliminato" });
+    } catch (e) {
+      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    }
+  }
+
+  const deleteLabel = transaction
+    ? `${transaction.merchant_name || transaction.description || "Movimento"} · ${
+        transaction.type === "income" ? "+" : "-"
+      }${formatCurrency(transaction.amount)} · ${formatDayMonth(transaction.date)}`
+    : "";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -237,6 +255,25 @@ export default function AddTransactionDialog({
             {saving ? "Salvataggio..." : isEditing ? "Salva" : "Aggiungi"}
           </Button>
         </DialogFooter>
+
+        {isEditing && (
+          <Button
+            variant="ghost"
+            onClick={() => setConfirmDelete(true)}
+            disabled={saving}
+            className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+          >
+            Elimina movimento
+          </Button>
+        )}
+
+        <ConfirmDialog
+          open={confirmDelete}
+          onOpenChange={setConfirmDelete}
+          title="Eliminare il movimento?"
+          description={deleteLabel}
+          onConfirm={handleDelete}
+        />
       </DialogContent>
     </Dialog>
   );

@@ -160,15 +160,6 @@ export default function Transactions() {
     }
   }
 
-  async function handleDelete(tx) {
-    try {
-      await localData.entities.Transaction.delete(tx.id);
-      toast({ title: "Movimento eliminato" });
-    } catch (e) {
-      showError(e);
-    }
-  }
-
   function handleEdit(tx) {
     setEditingTransaction(tx);
     setEditDialogOpen(true);
@@ -278,7 +269,6 @@ export default function Transactions() {
                 transaction={tx}
                 categories={categories}
                 onCategorize={handleCategorize}
-                onDelete={handleDelete}
                 onEdit={handleEdit}
               />
             ))}

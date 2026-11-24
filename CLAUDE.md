@@ -63,7 +63,7 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
   4. ~~Paginazione dei movimenti~~ (fatto: scroll infinito a blocchi di 50).
   5. ~~Statistiche e grafici di trend~~ (fatto: pagina Statistiche "dove spendi di più").
   6. ~~Ricerca anche sull'esercente~~ (fatto: cerca in esercente, descrizione e categoria mentre scrivi).
-  7. Riga transazione meno affollata su mobile.
+  7. ~~Riga transazione meno affollata su mobile~~ (fatto: tocca la riga per modificare, chip categoria, Elimina nella modifica).
 - **Fase 4, data layer:** passare a React Query (già installato ma inutilizzato) al posto degli eventi window; colonne indicizzate (`date`, `type`, `category_id`); versioning dello schema con migrazioni.
 - **Altro:** toggle per la dark mode; valutare `allowBackup` e il permesso `INTERNET` su Android.
 
