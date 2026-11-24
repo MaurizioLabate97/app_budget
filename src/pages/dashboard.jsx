@@ -1,5 +1,5 @@
-
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { localData } from "@/api/localDataClient";
 import { Link } from "react-router-dom";
 import {
@@ -15,122 +15,79 @@ import TransactionRow from "@/components/transactions/transactionrow";
 import AddTransactionDialog from "@/components/transactions/addtransactiondialog";
 import DueOccurrences from "@/components/recurring/dueoccurrences";
 import { getMonthRange } from "@/lib/date";
+import { useEntityAggregate, useEntityFilter } from "@/hooks/useLocalData";
+import { useToast } from "@/components/ui/use-toast";
 
 function getCurrentMonthKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// Cambiando mese restano visibili i dati di prima finché arrivano i nuovi.
+const KEEP = { placeholderData: keepPreviousData };
+
 export default function Dashboard() {
+  const { toast } = useToast();
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey());
-  const [data, setData] = useState(null);
-  const [recent, setRecent] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [editingTransaction, setEditingTransaction] = useState(null);
 
-  useEffect(() => {
-    load(selectedMonth);
+  const [year, month] = selectedMonth.split("-").map(Number);
+  const { start: monthStart, end: monthEnd } = getMonthRange(year, month);
+  const inMonth = { date: { $gte: monthStart, $lt: monthEnd } };
 
-    const handler = () => load(selectedMonth);
-    window.addEventListener("expense-added", handler);
+  const summaryQ = useEntityAggregate(
+    "Transaction",
+    { query: inMonth, groupBy: "type", sum: ["amount"] },
+    KEEP
+  );
+  const byCategoryQ = useEntityAggregate(
+    "Transaction",
+    { query: { type: "expense", ...inMonth }, groupBy: "category_id", sum: ["amount"] },
+    KEEP
+  );
+  const categoriesQ = useEntityFilter("Category");
+  const recentQ = useEntityFilter("Transaction", inMonth, { sort: "-date", limit: 5 }, KEEP);
 
-    return () => window.removeEventListener("expense-added", handler);
-  }, [selectedMonth]);
+  const categories = useMemo(() => categoriesQ.data?.items ?? [], [categoriesQ.data]);
+  const recent = recentQ.data?.items ?? [];
+  const loading = [summaryQ, byCategoryQ, categoriesQ, recentQ].some((q) => q.isPending);
 
-  async function load(monthKey) {
-    setLoading(true);
+  const d = useMemo(() => {
+    const rows = summaryQ.data?.rows ?? [];
+    const income = rows.find((row) => row.type === "income")?.sum_amount || 0;
+    const expense = rows.find((row) => row.type === "expense")?.sum_amount || 0;
 
-    try {
-      const [year, month] = monthKey.split("-").map(Number);
-      const { start: monthStart, end: monthEnd } = getMonthRange(year, month);
+    const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
 
-      const [summary, catAgg, catRes, recentRes] = await Promise.all([
-        localData.entities.Transaction.aggregate({
-          query: {
-            date: { $gte: monthStart, $lt: monthEnd },
-          },
-          groupBy: "type",
-          sum: ["amount"],
-        }),
+    const allCategories = (byCategoryQ.data?.rows ?? [])
+      .map((row) => {
+        const category = categoryMap[row.category_id];
 
-        localData.entities.Transaction.aggregate({
-          query: {
-            type: "expense",
-            date: { $gte: monthStart, $lt: monthEnd },
-          },
-          groupBy: "category_id",
-          sum: ["amount"],
-        }),
+        return {
+          name: category?.name || "Senza categoria",
+          value: row.sum_amount || 0,
+          color: category?.color || "#94a3b8",
+        };
+      })
+      .filter((item) => item.value > 0)
+      .sort((a, b) => b.value - a.value);
 
-        localData.entities.Category.filter({}, { limit: 100 }),
+    // Mostra le prime 5 categorie del mese e raggruppa le altre.
+    const breakdown = allCategories.slice(0, 5);
+    const otherCategories = allCategories.slice(5);
 
-        localData.entities.Transaction.filter(
-          {
-            date: { $gte: monthStart, $lt: monthEnd },
-          },
-          { sort: "-date", limit: 5 }
-        ),
-      ]);
-
-      const income =
-        summary.rows.find((row) => row.type === "income")?.sum_amount || 0;
-
-      const expense =
-        summary.rows.find((row) => row.type === "expense")?.sum_amount || 0;
-
-      const categoryMap = {};
-
-      catRes.items.forEach((category) => {
-        categoryMap[category.id] = category;
+    if (otherCategories.length > 0) {
+      breakdown.push({
+        name: "Altro",
+        value: otherCategories.reduce((total, category) => total + category.value, 0),
+        color: "#94a3b8",
       });
-
-      const allCategories = catAgg.rows
-        .map((row) => {
-          const category = categoryMap[row.category_id];
-
-          return {
-            name: category?.name || "Senza categoria",
-            value: row.sum_amount || 0,
-            color: category?.color || "#94a3b8",
-          };
-        })
-        .filter((item) => item.value > 0)
-        .sort((a, b) => b.value - a.value);
-
-      // Mostra le prime 5 categorie del mese e raggruppa le altre.
-      const topCategories = allCategories.slice(0, 5);
-      const otherCategories = allCategories.slice(5);
-
-      if (otherCategories.length > 0) {
-        const otherTotal = otherCategories.reduce(
-          (total, category) => total + category.value,
-          0
-        );
-
-        topCategories.push({
-          name: "Altro",
-          value: otherTotal,
-          color: "#94a3b8",
-        });
-      }
-
-      setData({
-        income,
-        expense,
-        balance: income - expense,
-        breakdown: topCategories,
-      });
-
-      setRecent(recentRes.items);
-      setCategories(catRes.items);
-    } catch (error) {
-      console.error("Error loading dashboard:", error);
-    } finally {
-      setLoading(false);
     }
-  }
 
+    return { income, expense, balance: income - expense, breakdown };
+  }, [summaryQ.data, byCategoryQ.data, categories]);
+
+  // La scrittura invalida la cache: Home e le altre pagine si aggiornano da sole.
   async function handleCategorize(tx, categoryId, categoryName) {
     try {
       await localData.entities.Transaction.update(tx.id, {
@@ -138,10 +95,8 @@ export default function Dashboard() {
         category_name: categoryName,
         is_categorized: true,
       });
-
-      load(selectedMonth);
     } catch (error) {
-      console.error("Error categorizing transaction:", error);
+      toast({ title: "Errore", description: error.message, variant: "destructive" });
     }
   }
 
@@ -156,16 +111,8 @@ export default function Dashboard() {
     setSelectedMonth(nextMonthKey);
   }
 
-  const [year, month] = selectedMonth.split("-").map(Number);
   const monthName = MONTH_NAMES[month - 1];
   const isCurrentMonth = selectedMonth === getCurrentMonthKey();
-
-  const d = data || {
-    income: 0,
-    expense: 0,
-    balance: 0,
-    breakdown: [],
-  };
 
   if (loading) {
     return (
@@ -307,7 +254,6 @@ export default function Dashboard() {
         }}
         categories={categories}
         transaction={editingTransaction}
-        onAdded={() => load(selectedMonth)}
       />
     </div>
   );

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 
 import { localData } from "@/api/localDataClient";
@@ -9,6 +10,8 @@ import NewBudgetSheet from "@/components/budget/newbudgetsheet";
 import { formatCurrency, MONTH_NAMES } from "@/lib/format";
 import { getMonthRange } from "@/lib/date";
 import { ensureMonthBudgets } from "@/lib/budgetActions";
+import { filterKey } from "@/lib/queryKeys";
+import { useEntityAggregate, useEntityFilter } from "@/hooks/useLocalData";
 
 const SAVE_DELAY = 600;
 const MAX_MONTHS_BACK = 11;
@@ -20,59 +23,48 @@ export default function Budgets() {
 
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const [budgets, setBudgets] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [spent, setSpent] = useState({});
-  const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(null);
   const [drafts, setDrafts] = useState({});
   const [sheetOpen, setSheetOpen] = useState(false);
   const [toDelete, setToDelete] = useState(null);
 
   const timers = useRef({});
-  const loadSeq = useRef(0);
+  const queryClient = useQueryClient();
 
   const viewIndex = year * 12 + (month - 1);
   const monthName = MONTH_NAMES[month - 1];
   const isCurrent = viewIndex === currentIndex;
 
-  const load = useCallback(async () => {
-    const seq = ++loadSeq.current;
-    try {
+  const budgetsKey = filterKey("Budget", { month, year });
+  const budgetsQuery = useQuery({
+    queryKey: budgetsKey,
+    queryFn: async () => {
       // I mesi futuri non si riempiono: il riporto vale per il mese corrente e quelli passati.
       if (viewIndex <= currentIndex) await ensureMonthBudgets(year, month);
+      return localData.entities.Budget.filter({ month, year });
+    },
+  });
+  const categoriesQuery = useEntityFilter("Category", { type: "expense" });
+  const { start, end } = getMonthRange(year, month);
+  const spentQuery = useEntityAggregate("Transaction", {
+    query: { type: "expense", date: { $gte: start, $lt: end }, is_categorized: true },
+    groupBy: "category_id",
+    sum: ["amount"],
+  });
 
-      const { start, end } = getMonthRange(year, month);
-      const [budRes, catRes, spentAgg] = await Promise.all([
-        localData.entities.Budget.filter({ month, year }),
-        localData.entities.Category.filter({ type: "expense" }),
-        localData.entities.Transaction.aggregate({
-          query: { type: "expense", date: { $gte: start, $lt: end }, is_categorized: true },
-          groupBy: "category_id",
-          sum: ["amount"],
-        }),
-      ]);
-      if (seq !== loadSeq.current) return;
+  const budgets = budgetsQuery.data?.items ?? [];
+  const categories = categoriesQuery.data?.items ?? [];
+  const spent = Object.fromEntries(
+    (spentQuery.data?.rows ?? []).map((r) => [r.category_id, r.sum_amount || 0])
+  );
+  const loading = budgetsQuery.isPending || categoriesQuery.isPending || spentQuery.isPending;
 
-      setBudgets(budRes.items);
-      setCategories(catRes.items);
-      const s = {};
-      spentAgg.rows.forEach((r) => (s[r.category_id] = r.sum_amount || 0));
-      setSpent(s);
-    } catch (e) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
-    } finally {
-      if (seq === loadSeq.current) setLoading(false);
-    }
-  }, [year, month, viewIndex, currentIndex, toast]);
-
-  useEffect(() => {
-    setLoading(true);
-    setOpenId(null);
-    load();
-    window.addEventListener("expense-added", load);
-    return () => window.removeEventListener("expense-added", load);
-  }, [load]);
+  /** Aggiorna subito una voce nella cache, senza aspettare il ricaricamento. */
+  function patchBudget(id, patch) {
+    queryClient.setQueryData(budgetsKey, (old) =>
+      old && { ...old, items: old.items.map((x) => (x.id === id ? { ...x, ...patch } : x)) }
+    );
+  }
 
   // Salva le modifiche in sospeso quando si lascia la pagina o l'app va in background.
   useEffect(() => {
@@ -92,6 +84,7 @@ export default function Budgets() {
     const next = viewIndex + delta;
     if (next > currentIndex || next < currentIndex - MAX_MONTHS_BACK) return;
     Object.values(timers.current).forEach((t) => t.flush());
+    setOpenId(null);
     setYear(Math.floor(next / 12));
     setMonth((next % 12) + 1);
   }
@@ -108,7 +101,7 @@ export default function Budgets() {
       try {
         const updated = await localData.entities.Budget.update(budget.id, { amount_limit: value });
         // Aggiorna subito la riga, così togliendo il draft non ricompare il valore vecchio.
-        setBudgets((bs) => bs.map((x) => (x.id === budget.id ? { ...x, ...updated, amount_limit: value } : x)));
+        patchBudget(budget.id, { ...updated, amount_limit: value });
       } catch (e) {
         toast({ title: "Errore", description: e.message, variant: "destructive" });
       } finally {
@@ -133,14 +126,14 @@ export default function Budgets() {
 
   async function setRecurring(budget, recurring) {
     const previous = budget.recurring;
-    setBudgets((bs) => bs.map((x) => (x.id === budget.id ? { ...x, recurring } : x)));
+    patchBudget(budget.id, { recurring });
     try {
       await localData.entities.Budget.update(budget.id, { recurring });
       toast({
         title: recurring ? "Si ripeterà ogni mese" : "Non verrà riportata ai mesi successivi",
       });
     } catch (e) {
-      setBudgets((bs) => bs.map((x) => (x.id === budget.id ? { ...x, recurring: previous } : x)));
+      patchBudget(budget.id, { recurring: previous });
       toast({ title: "Errore", description: e.message, variant: "destructive" });
     }
   }

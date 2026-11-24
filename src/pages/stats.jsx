@@ -1,13 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { localData } from "@/api/localDataClient";
-import { useToast } from "@/components/ui/use-toast";
 import StatsRow from "@/components/stats/statsrow";
 import AddTransactionDialog from "@/components/transactions/addtransactiondialog";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
-import { todayLocal } from "@/lib/date";
+import { useEntityFilter, useToday } from "@/hooks/useLocalData";
 import { computeStats, periodRange } from "@/lib/stats";
 
 const PERIODS = [3, 6, 12];
@@ -31,48 +29,20 @@ function savePeriod(v) {
 }
 
 export default function Stats() {
-  const { toast } = useToast();
   const [months, setMonths] = useState(readPeriod);
-  const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [today, setToday] = useState(todayLocal);
-  const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState(undefined);
   const [editing, setEditing] = useState(null);
-  const loadSeq = useRef(0);
+  // Su iPhone l'app resta aperta in background: al ritorno il periodo segue la data di oggi.
+  const today = useToday();
 
-  const load = useCallback(async () => {
-    const seq = ++loadSeq.current;
-    const now = todayLocal();
-    // Servono tutte le spese fino alla fine del periodo: la prima decide il giorno di inizio uso.
-    const { end } = periodRange(now, 12);
-    try {
-      const [txRes, catRes] = await Promise.all([
-        localData.entities.Transaction.filter({ type: "expense", date: { $lt: end } }),
-        localData.entities.Category.filter({}),
-      ]);
-      if (seq !== loadSeq.current) return;
-      setTransactions(txRes.items);
-      setCategories(catRes.items);
-      setToday(now);
-    } catch (e) {
-      if (seq === loadSeq.current) toast({ title: "Errore", description: e.message, variant: "destructive" });
-    } finally {
-      if (seq === loadSeq.current) setLoading(false);
-    }
-  }, [toast]);
+  // Servono tutte le spese fino alla fine del periodo: la prima decide il giorno di inizio uso.
+  const { end } = periodRange(today, 12);
+  const txQuery = useEntityFilter("Transaction", { type: "expense", date: { $lt: end } });
+  const categoriesQuery = useEntityFilter("Category");
 
-  useEffect(() => {
-    load();
-    // Su iPhone l'app resta aperta in background: al ritorno ricarica, così il periodo segue la data di oggi.
-    const onVisible = () => document.visibilityState === "visible" && load();
-    window.addEventListener("expense-added", load);
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      window.removeEventListener("expense-added", load);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [load]);
+  const transactions = useMemo(() => txQuery.data?.items ?? [], [txQuery.data]);
+  const categories = useMemo(() => categoriesQuery.data?.items ?? [], [categoriesQuery.data]);
+  const loading = txQuery.isPending || categoriesQuery.isPending;
 
   const stats = useMemo(
     () => computeStats({ transactions, categories, today, months }),

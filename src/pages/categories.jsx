@@ -1,7 +1,6 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
-  localData,
   getCategoryUsage,
   deleteCategoryCascade,
 } from "@/api/localDataClient";
@@ -13,37 +12,17 @@ import { CategoryIcon } from "@/components/categoryicon";
 import CategoryDialog from "@/components/categories/categorydialog";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { isFixedCategory } from "@/lib/stats";
+import { useEntityFilter } from "@/hooks/useLocalData";
 
 export default function Categories() {
   const { toast } = useToast();
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [toDelete, setToDelete] = useState(null); // { category, usage }
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await localData.entities.Category.filter(
-        {},
-        { sort: "name", limit: 100 }
-      );
-      setCategories(res.items);
-    } catch (e) {
-      toast({
-        title: "Errore",
-        description: e.message,
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
+  const categoriesQuery = useEntityFilter("Category", {}, { sort: "name" });
+  const categories = categoriesQuery.data?.items ?? [];
+  const loading = categoriesQuery.isPending;
 
   async function askDelete(cat) {
     try {
@@ -85,7 +64,6 @@ export default function Categories() {
   async function handleDelete(cat) {
     try {
       await deleteCategoryCascade(cat.id);
-      load();
       toast({ title: "Categoria eliminata" });
     } catch (e) {
       toast({
@@ -208,7 +186,6 @@ export default function Categories() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         category={editing}
-        onSaved={load}
       />
     </div>
   );

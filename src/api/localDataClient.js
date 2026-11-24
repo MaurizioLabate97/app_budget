@@ -69,14 +69,25 @@ function serializeWrite(operation) {
   return result;
 }
 
+const dataListeners = new Set();
+
+/**
+ * Avvisa `listener` dopo ogni scrittura con `{ entityName | entityNames, action }`
+ * (`{ action: 'import' }` dopo un restore). Restituisce la funzione per disiscriversi.
+ */
+export function subscribeDataChanged(listener) {
+  dataListeners.add(listener);
+  return () => dataListeners.delete(listener);
+}
+
 function dispatchDataChanged(detail) {
-  if (typeof window === 'undefined') return;
-
-  window.dispatchEvent(
-    new CustomEvent('local-data-changed', { detail })
-  );
-
-  window.dispatchEvent(new CustomEvent('expense-added'));
+  for (const listener of dataListeners) {
+    try {
+      listener(detail);
+    } catch (error) {
+      console.error('Errore in un listener dei dati:', error);
+    }
+  }
 }
 
 async function getSqliteDb() {
@@ -910,7 +921,7 @@ export async function deleteCategoryCascade(categoryId) {
   });
 
   dispatchDataChanged({
-    entityName: 'Category',
+    entityNames: ['Category', 'Transaction', 'Budget', 'RecurringTransaction'],
     action: 'delete',
     id: categoryId,
   });

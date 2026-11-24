@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 
 import { localData } from "@/api/localDataClient";
 import { Card } from "@/components/ui/card";
@@ -18,6 +19,8 @@ import { MONTH_NAMES } from "@/lib/format";
 import { getMonthRange } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import { buildSearchQuery } from "@/lib/search";
+import { filterKey } from "@/lib/queryKeys";
+import { useEntityFilter } from "@/hooks/useLocalData";
 
 const PAGE_SIZE = 50;
 const SEARCH_DELAY = 500;
@@ -25,11 +28,6 @@ const SEARCH_DELAY = 500;
 export default function Transactions() {
   const { toast } = useToast();
 
-  const [transactions, setTransactions] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -38,10 +36,6 @@ export default function Transactions() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
 
-  // Ultima lista mostrata e richiesta in corso: servono fuori dal ciclo di render.
-  const shown = useRef([]);
-  const loadSeq = useRef(0);
-  const fetchingMore = useRef(false);
   const sentinel = useRef(null);
 
   const query = useMemo(() => {
@@ -60,63 +54,44 @@ export default function Transactions() {
     [toast]
   );
 
-  /**
-   * Ricarica la lista. Con `keep` ricarica quanti movimenti erano già mostrati,
-   * così dopo una modifica la lista non torna ai primi 50.
-   */
-  const load = useCallback(
-    async ({ keep = false } = {}) => {
-      const seq = ++loadSeq.current;
-      if (!keep) setLoading(true);
-      const limit = keep ? Math.max(PAGE_SIZE, shown.current.length) : PAGE_SIZE;
-
-      try {
-        const [txRes, catRes] = await Promise.all([
-          localData.entities.Transaction.filter(query, { sort: "-date", limit }),
-          localData.entities.Category.filter({}),
-        ]);
-        if (seq !== loadSeq.current) return;
-
-        shown.current = txRes.items;
-        setTransactions(txRes.items);
-        setTotal(txRes.total);
-        setCategories(catRes.items);
-      } catch (e) {
-        if (seq === loadSeq.current) showError(e);
-      } finally {
-        if (seq === loadSeq.current) setLoading(false);
-      }
-    },
-    [query, showError]
-  );
-
-  const loadMore = useCallback(async () => {
-    if (fetchingMore.current || shown.current.length >= total) return;
-    const seq = loadSeq.current;
-    fetchingMore.current = true;
-    setLoadingMore(true);
-
-    try {
-      const res = await localData.entities.Transaction.filter(query, {
+  // Blocchi da 50. Dopo una scrittura React Query ricarica tutti i blocchi già
+  // mostrati, quindi la lista non torna ai primi 50.
+  const txQuery = useInfiniteQuery({
+    queryKey: [...filterKey("Transaction", query, { sort: "-date" }), "pages"],
+    queryFn: ({ pageParam }) =>
+      localData.entities.Transaction.filter(query, {
         sort: "-date",
-        offset: shown.current.length,
+        offset: pageParam,
         limit: PAGE_SIZE,
-      });
-      // Nel frattempo è partito un ricaricamento: questo blocco non vale più.
-      if (seq !== loadSeq.current) return;
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => {
+      const loaded = pages.reduce((n, page) => n + page.items.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+    // Cambiando filtro o ricerca resta visibile la lista di prima finché arriva la nuova.
+    placeholderData: keepPreviousData,
+  });
+  const categoriesQuery = useEntityFilter("Category");
 
-      const ids = new Set(shown.current.map((t) => t.id));
-      const merged = [...shown.current, ...res.items.filter((t) => !ids.has(t.id))];
-      shown.current = merged;
-      setTransactions(merged);
-      setTotal(res.total);
-    } catch (e) {
-      showError(e);
-    } finally {
-      fetchingMore.current = false;
-      setLoadingMore(false);
-    }
-  }, [query, total, showError]);
+  const categories = categoriesQuery.data?.items ?? [];
+  const pages = txQuery.data?.pages;
+  const total = pages?.at(-1)?.total ?? 0;
+  const loading = txQuery.isPending;
+  const loadingMore = txQuery.isFetchingNextPage;
+
+  // Tra un blocco e l'altro un movimento può spostarsi: si tiene la prima copia.
+  const transactions = useMemo(() => {
+    const seen = new Set();
+    return (pages ?? [])
+      .flatMap((page) => page.items)
+      .filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
+  }, [pages]);
+
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = txQuery;
+  const loadMore = useCallback(() => {
+    if (!isFetchingNextPage) fetchNextPage();
+  }, [isFetchingNextPage, fetchNextPage]);
 
   // La ricerca parte da sola poco dopo l'ultima battuta.
   useEffect(() => {
@@ -124,15 +99,7 @@ export default function Transactions() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Nuovo filtro o nuova ricerca: si riparte dal primo blocco.
-  useEffect(() => {
-    load();
-    const handler = () => load({ keep: true });
-    window.addEventListener("expense-added", handler);
-    return () => window.removeEventListener("expense-added", handler);
-  }, [load]);
-
-  const hasMore = !loading && transactions.length < total;
+  const hasMore = !loading && !!hasNextPage;
 
   // Quando la fine della lista entra in vista carica il blocco successivo.
   // Si riaggancia a ogni blocco: se la fine è ancora visibile ne carica subito un altro.
@@ -147,7 +114,7 @@ export default function Transactions() {
     return () => observer.disconnect();
   }, [hasMore, loadMore, transactions.length]);
 
-  // Le scritture lanciano `expense-added`, che ricarica la lista mantenendo la posizione.
+  // Le scritture invalidano la cache: la lista si ricarica mantenendo la posizione.
   async function handleCategorize(tx, categoryId, categoryName) {
     try {
       await localData.entities.Transaction.update(tx.id, {

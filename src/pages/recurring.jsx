@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Plus, Pencil, Trash2, Pause, Play } from "lucide-react";
 
 import { localData } from "@/api/localDataClient";
@@ -10,44 +10,26 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import RecurringDialog from "@/components/recurring/recurringdialog";
 import { formatCurrency, formatDayMonth } from "@/lib/format";
 import { todayLocal } from "@/lib/date";
+import { useEntityFilter, useToday } from "@/hooks/useLocalData";
 import { getDueOccurrences, nextOccurrence, periodsToSkipOnResume } from "@/lib/recurring";
 
 const FREQUENCY_LABEL = { monthly: "Mensile", yearly: "Annuale" };
 
 export default function Recurring() {
   const { toast } = useToast();
-  const [recurrings, setRecurrings] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [confirmed, setConfirmed] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [toDelete, setToDelete] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
-  useEffect(() => {
-    load();
-    const handler = () => load();
-    window.addEventListener("expense-added", handler);
-    return () => window.removeEventListener("expense-added", handler);
-  }, []);
+  const recurringQuery = useEntityFilter("RecurringTransaction", {}, { sort: "description" });
+  const categoriesQuery = useEntityFilter("Category", {}, { sort: "name" });
+  const confirmedQuery = useEntityFilter("Transaction", { source: "recurring" });
 
-  async function load() {
-    try {
-      const [rec, cats, tx] = await Promise.all([
-        localData.entities.RecurringTransaction.filter({}, { sort: "description" }),
-        localData.entities.Category.filter({}, { sort: "name" }),
-        localData.entities.Transaction.filter({ source: "recurring" }),
-      ]);
-      setRecurrings(rec.items);
-      setCategories(cats.items);
-      setConfirmed(tx.items);
-    } catch (e) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }
+  const recurrings = recurringQuery.data?.items ?? [];
+  const categories = categoriesQuery.data?.items ?? [];
+  const confirmed = confirmedQuery.data?.items ?? [];
+  const loading = recurringQuery.isPending || categoriesQuery.isPending || confirmedQuery.isPending;
 
   function openDialog(recurring = null) {
     setEditing(recurring);
@@ -88,7 +70,7 @@ export default function Recurring() {
     }
   }
 
-  const today = todayLocal();
+  const today = useToday();
 
   return (
     <div className="space-y-4 p-4 max-w-md mx-auto">
@@ -211,7 +193,6 @@ export default function Recurring() {
         onOpenChange={setDialogOpen}
         categories={categories}
         recurring={editing}
-        onSaved={load}
       />
     </div>
   );

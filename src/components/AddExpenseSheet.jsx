@@ -8,6 +8,7 @@ import { CategoryIcon } from "@/components/categoryicon";
 import { cn } from "@/lib/utils";
 import { todayLocal } from "@/lib/date";
 import { parseAmount } from "@/lib/format";
+import { useEntityFilter } from "@/hooks/useLocalData";
 
 export default function AddExpenseSheet({ open, onOpenChange }) {
   const { toast } = useToast();
@@ -16,7 +17,6 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
   const [categoryId, setCategoryId] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(todayLocal());
-  const [categories, setCategories] = useState([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -26,18 +26,11 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
       setCategoryId("");
       setDescription("");
       setDate(todayLocal());
-      loadCategories();
     }
   }, [open]);
 
-  async function loadCategories() {
-    try {
-      const res = await localData.entities.Category.filter({}, { sort: "name", limit: 100 });
-      setCategories(res.items);
-    } catch {
-      // categorie non caricate: il selettore resta vuoto
-    }
-  }
+  const categoriesQuery = useEntityFilter("Category", {}, { sort: "name" });
+  const categories = categoriesQuery.data?.items ?? [];
 
   const filteredCats = categories.filter((c) => c.type === type);
 
@@ -60,7 +53,6 @@ export default function AddExpenseSheet({ open, onOpenChange }) {
         is_categorized: !!categoryId,
         source: "manual",
       });
-      window.dispatchEvent(new CustomEvent("expense-added"));
       onOpenChange(false);
       toast({ title: type === "income" ? "Entrata aggiunta" : "Spesa aggiunta" });
     } catch (e) {

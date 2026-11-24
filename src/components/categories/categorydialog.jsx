@@ -102,7 +102,7 @@ export default function CategoryDialog({
         });
       }
 
-      onSaved();
+      onSaved?.();
       onOpenChange(false);
 
       toast({

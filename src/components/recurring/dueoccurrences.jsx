@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import { BellRing, Check, SkipForward } from "lucide-react";
 
 import { localData } from "@/api/localDataClient";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
 import { formatCurrency, formatDayMonth } from "@/lib/format";
-import { todayLocal } from "@/lib/date";
+import { useEntityFilter, useToday } from "@/hooks/useLocalData";
 import { getDueOccurrences, periodKey } from "@/lib/recurring";
 
 const keyOf = (o) => `${o.recurring.id}:${o.periodKey}`;
@@ -17,48 +17,26 @@ const keyOf = (o) => `${o.recurring.id}:${o.periodKey}`;
  */
 export default function DueOccurrences() {
   const { toast } = useToast();
-  const [due, setDue] = useState([]);
   const [busy, setBusy] = useState(() => new Set());
+  // Scadenze appena confermate o saltate: spariscono subito, senza aspettare il ricaricamento.
+  const [done, setDone] = useState(() => new Set());
   // Guardia sincrona contro il doppio tocco (lo stato React si aggiorna dopo).
   const inFlight = useRef(new Set());
   // Le azioni girano una alla volta, così ognuna legge i dati già aggiornati.
   const queue = useRef(Promise.resolve());
-  // Ignora le risposte di caricamenti superati da uno più recente.
-  const loadSeq = useRef(0);
 
-  useEffect(() => {
-    load();
-    const handler = () => load();
-    // Se l'app resta aperta oltre la mezzanotte, le scadenze del nuovo giorno
-    // compaiono quando torna in primo piano.
-    const onVisible = () => document.visibilityState === "visible" && load();
-    window.addEventListener("expense-added", handler);
-    window.addEventListener("focus", handler);
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      window.removeEventListener("expense-added", handler);
-      window.removeEventListener("focus", handler);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, []);
+  // Se l'app resta aperta oltre la mezzanotte, le scadenze del nuovo giorno
+  // compaiono quando torna in primo piano.
+  const today = useToday();
+  const recurringQuery = useEntityFilter("RecurringTransaction");
+  const confirmedQuery = useEntityFilter("Transaction", { source: "recurring" });
 
-  async function load() {
-    const seq = ++loadSeq.current;
-    try {
-      const [rec, tx] = await Promise.all([
-        localData.entities.RecurringTransaction.filter({}),
-        localData.entities.Transaction.filter({ source: "recurring" }),
-      ]);
-      if (seq !== loadSeq.current) return;
-      setDue(
-        getDueOccurrences(rec.items, tx.items, todayLocal()).filter(
-          (o) => !inFlight.current.has(keyOf(o))
-        )
-      );
-    } catch (e) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
-    }
-  }
+  const due = useMemo(() => {
+    if (!recurringQuery.data || !confirmedQuery.data) return [];
+    return getDueOccurrences(recurringQuery.data.items, confirmedQuery.data.items, today).filter(
+      (o) => !done.has(keyOf(o))
+    );
+  }, [recurringQuery.data, confirmedQuery.data, today, done]);
 
   function run(occurrence, action) {
     const key = keyOf(occurrence);
@@ -70,8 +48,7 @@ export default function DueOccurrences() {
     queue.current = queue.current.then(async () => {
       try {
         await action();
-        // Toglie subito la riga, senza aspettare il ricaricamento.
-        setDue((list) => list.filter((o) => keyOf(o) !== key));
+        setDone((set) => new Set(set).add(key));
       } catch (e) {
         toast({ title: "Errore", description: e.message, variant: "destructive" });
       } finally {
@@ -124,8 +101,6 @@ export default function DueOccurrences() {
   }
 
   if (due.length === 0) return null;
-
-  const today = todayLocal();
 
   return (
     <Card className="p-4 space-y-3 border-amber-500/40 bg-amber-500/5">
