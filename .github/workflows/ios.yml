@@ -1,0 +1,58 @@
+# Compila l'app iOS senza firma e la pubblica come .ipa da installare con Sideloadly
+# (che la firma con l'Apple ID gratuito). Si lancia a mano: Actions → "Build iOS" → Run workflow.
+name: Build iOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dipendenze
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build web
+        run: npm run build
+
+      - name: Copia nel progetto iOS (cap sync, pod install)
+        run: npx cap sync ios
+
+      - name: Compila senza firma
+        run: |
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Crea l'.ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry "AppBudget-${{ github.run_number }}.ipa" Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AppBudget-ipa-${{ github.run_number }}
+          path: AppBudget-${{ github.run_number }}.ipa
+          retention-days: 14
