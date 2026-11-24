@@ -106,7 +106,7 @@ export default function AddTransactionDialog({
         });
       }
 
-      onAdded();
+      onAdded?.();
       onOpenChange(false);
 
       toast({

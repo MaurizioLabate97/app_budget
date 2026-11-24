@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 
 import { localData } from "@/api/localDataClient";
 import { Card } from "@/components/ui/card";
@@ -19,72 +18,129 @@ import { MONTH_NAMES } from "@/lib/format";
 import { getMonthRange } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
+const PAGE_SIZE = 50;
+
 export default function Transactions() {
   const { toast } = useToast();
 
   const [transactions, setTransactions] = useState([]);
+  const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
-  const [refresh, setRefresh] = useState(0);
 
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
 
-  useEffect(() => {
-    load();
+  // Ultima lista mostrata e richiesta in corso: servono fuori dal ciclo di render.
+  const shown = useRef([]);
+  const loadSeq = useRef(0);
+  const fetchingMore = useRef(false);
+  const sentinel = useRef(null);
 
-    const handler = () => load();
-    window.addEventListener("expense-added", handler);
+  const query = useMemo(() => {
+    const q = {};
+    if (typeFilter !== "all") q.type = typeFilter;
+    if (monthFilter !== "all") {
+      const [y, m] = monthFilter.split("-").map(Number);
+      const { start, end } = getMonthRange(y, m);
+      q.date = { $gte: start, $lt: end };
+    }
+    if (appliedSearch) q.description = { $regex: appliedSearch, $options: "i" };
+    return q;
+  }, [typeFilter, monthFilter, appliedSearch]);
 
-    return () => window.removeEventListener("expense-added", handler);
-  }, [refresh, typeFilter, monthFilter]);
+  const showError = useCallback(
+    (e) => toast({ title: "Errore", description: e.message, variant: "destructive" }),
+    [toast]
+  );
 
-  async function load() {
-    setLoading(true);
+  /**
+   * Ricarica la lista. Con `keep` ricarica quanti movimenti erano già mostrati,
+   * così dopo una modifica la lista non torna ai primi 50.
+   */
+  const load = useCallback(
+    async ({ keep = false } = {}) => {
+      const seq = ++loadSeq.current;
+      if (!keep) setLoading(true);
+      const limit = keep ? Math.max(PAGE_SIZE, shown.current.length) : PAGE_SIZE;
+
+      try {
+        const [txRes, catRes] = await Promise.all([
+          localData.entities.Transaction.filter(query, { sort: "-date", limit }),
+          localData.entities.Category.filter({}),
+        ]);
+        if (seq !== loadSeq.current) return;
+
+        shown.current = txRes.items;
+        setTransactions(txRes.items);
+        setTotal(txRes.total);
+        setCategories(catRes.items);
+      } catch (e) {
+        if (seq === loadSeq.current) showError(e);
+      } finally {
+        if (seq === loadSeq.current) setLoading(false);
+      }
+    },
+    [query, showError]
+  );
+
+  const loadMore = useCallback(async () => {
+    if (fetchingMore.current || shown.current.length >= total) return;
+    const seq = loadSeq.current;
+    fetchingMore.current = true;
+    setLoadingMore(true);
 
     try {
-      const query = {};
-
-      if (typeFilter !== "all") query.type = typeFilter;
-
-      if (monthFilter !== "all") {
-        const [y, m] = monthFilter.split("-").map(Number);
-        const { start, end } = getMonthRange(y, m);
-
-        query.date = { $gte: start, $lt: end };
-      }
-
-      if (search.trim()) {
-        query.description = {
-          $regex: search.trim(),
-          $options: "i",
-        };
-      }
-
-      const [txRes, catRes] = await Promise.all([
-        localData.entities.Transaction.filter(query, {
-          sort: "-date",
-          limit: 100,
-        }),
-        localData.entities.Category.filter({}, { limit: 100 }),
-      ]);
-
-      setTransactions(txRes.items);
-      setCategories(catRes.items);
-    } catch (e) {
-      toast({
-        title: "Errore",
-        description: e.message,
-        variant: "destructive",
+      const res = await localData.entities.Transaction.filter(query, {
+        sort: "-date",
+        offset: shown.current.length,
+        limit: PAGE_SIZE,
       });
-    } finally {
-      setLoading(false);
-    }
-  }
+      // Nel frattempo è partito un ricaricamento: questo blocco non vale più.
+      if (seq !== loadSeq.current) return;
 
+      const ids = new Set(shown.current.map((t) => t.id));
+      const merged = [...shown.current, ...res.items.filter((t) => !ids.has(t.id))];
+      shown.current = merged;
+      setTransactions(merged);
+      setTotal(res.total);
+    } catch (e) {
+      showError(e);
+    } finally {
+      fetchingMore.current = false;
+      setLoadingMore(false);
+    }
+  }, [query, total, showError]);
+
+  // Nuovo filtro o nuova ricerca: si riparte dal primo blocco.
+  useEffect(() => {
+    load();
+    const handler = () => load({ keep: true });
+    window.addEventListener("expense-added", handler);
+    return () => window.removeEventListener("expense-added", handler);
+  }, [load]);
+
+  const hasMore = !loading && transactions.length < total;
+
+  // Quando la fine della lista entra in vista carica il blocco successivo.
+  // Si riaggancia a ogni blocco: se la fine è ancora visibile ne carica subito un altro.
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!hasMore || !el) return;
+    const observer = new IntersectionObserver(
+      (entries) => entries.some((e) => e.isIntersecting) && loadMore(),
+      { rootMargin: "300px 0px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, transactions.length]);
+
+  // Le scritture lanciano `expense-added`, che ricarica la lista mantenendo la posizione.
   async function handleCategorize(tx, categoryId, categoryName) {
     try {
       await localData.entities.Transaction.update(tx.id, {
@@ -92,28 +148,17 @@ export default function Transactions() {
         category_name: categoryName,
         is_categorized: true,
       });
-
-      setRefresh((r) => r + 1);
     } catch (e) {
-      toast({
-        title: "Errore",
-        description: e.message,
-        variant: "destructive",
-      });
+      showError(e);
     }
   }
 
   async function handleDelete(tx) {
     try {
       await localData.entities.Transaction.delete(tx.id);
-      setRefresh((r) => r + 1);
       toast({ title: "Movimento eliminato" });
     } catch (e) {
-      toast({
-        title: "Errore",
-        description: e.message,
-        variant: "destructive",
-      });
+      showError(e);
     }
   }
 
@@ -157,10 +202,14 @@ export default function Transactions() {
 
         <Input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            // Svuotando il campo la ricerca si toglie subito.
+            if (!e.target.value.trim()) setAppliedSearch("");
+          }}
           placeholder="Cerca... (premi Invio)"
           className="pl-9"
-          onKeyDown={(e) => e.key === "Enter" && setRefresh((r) => r + 1)}
+          onKeyDown={(e) => e.key === "Enter" && setAppliedSearch(search.trim())}
         />
       </div>
 
@@ -199,6 +248,12 @@ export default function Transactions() {
         </Select>
       </div>
 
+      {!loading && total > 0 && (
+        <p className="text-xs text-muted-foreground px-1 tabular-nums">
+          {total === 1 ? "1 movimento" : `${total.toLocaleString("it-IT")} movimenti`}
+        </p>
+      )}
+
       <Card className="p-2">
         {loading ? (
           <div className="flex justify-center py-12">
@@ -209,16 +264,26 @@ export default function Transactions() {
             <p className="text-sm">Nessun movimento trovato</p>
           </div>
         ) : (
-          transactions.map((tx) => (
-            <TransactionRow
-              key={tx.id}
-              transaction={tx}
-              categories={categories}
-              onCategorize={handleCategorize}
-              onDelete={handleDelete}
-              onEdit={handleEdit}
-            />
-          ))
+          <>
+            {transactions.map((tx) => (
+              <TransactionRow
+                key={tx.id}
+                transaction={tx}
+                categories={categories}
+                onCategorize={handleCategorize}
+                onDelete={handleDelete}
+                onEdit={handleEdit}
+              />
+            ))}
+
+            {hasMore && (
+              <div ref={sentinel} className="flex justify-center py-4" aria-hidden={!loadingMore}>
+                {loadingMore && (
+                  <div className="w-5 h-5 border-2 border-muted border-t-primary rounded-full animate-spin" />
+                )}
+              </div>
+            )}
+          </>
         )}
       </Card>
 
@@ -226,7 +291,6 @@ export default function Transactions() {
         open={editDialogOpen}
         onOpenChange={handleDialogOpenChange}
         categories={categories}
-        onAdded={() => setRefresh((r) => r + 1)}
         transaction={editingTransaction}
       />
     </div>

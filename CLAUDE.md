@@ -59,7 +59,7 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
   1. ~~Spese ricorrenti~~ (fatto).
   2. ~~Budget ricorrenti~~ (fatto).
   3. ~~Categorie di default al primo avvio~~ (fatto con il popup dei budget).
-  4. Paginazione: oggi le transazioni sono limitate a 100.
+  4. ~~Paginazione dei movimenti~~ (fatto: scroll infinito a blocchi di 50).
   5. Statistiche e grafici di trend.
   6. Ricerca anche sull'esercente.
   7. Riga transazione meno affollata su mobile.
