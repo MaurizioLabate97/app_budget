@@ -7,7 +7,8 @@ import { parseAmount } from "@/lib/format";
  * - `version`: la versione a cui porta i dati;
  * - `sql` (facoltativo): istruzioni di struttura, eseguite solo su SQLite;
  * - `up` (facoltativo): trasforma un record, `(entityName, item) => item`.
- *   Restituire lo stesso oggetto significa "nessun cambio".
+ *   Restituire lo stesso oggetto significa "nessun cambio";
+ * - `backfillIndexes` (facoltativo, solo SQLite): ricalcola le colonne indicizzate.
  *
  * Le migrazioni girano una volta sola, in ordine, all'apertura dei dati e
  * sui backup importati. Le aggiunte vanno sempre in coda.
@@ -44,7 +45,24 @@ export const MIGRATIONS = [
       return item;
     },
   },
+  {
+    // Colonne indicizzate sulle transazioni (solo SQLite): le riempie il data layer
+    // con `indexedColumns`, senza dipendere dalle funzioni JSON di SQLite.
+    version: 3,
+    sql: [
+      "ALTER TABLE transactions ADD COLUMN date TEXT",
+      "ALTER TABLE transactions ADD COLUMN type TEXT",
+      "ALTER TABLE transactions ADD COLUMN category_id TEXT",
+      "CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)",
+      "CREATE INDEX IF NOT EXISTS idx_transactions_type_date ON transactions(type, date)",
+      "CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id)",
+    ],
+    backfillIndexes: true,
+  },
 ];
+
+/** Da questa versione la tabella `transactions` ha le colonne indicizzate. */
+export const INDEXES_VERSION = 3;
 
 export const SCHEMA_VERSION = MIGRATIONS.at(-1).version;
 

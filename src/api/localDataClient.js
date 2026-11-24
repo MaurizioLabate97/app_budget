@@ -13,7 +13,9 @@ import {
   migrateData,
   pendingMigrations,
   readVersion,
+  INDEXES_VERSION,
 } from '@/lib/migrations';
+import { buildSqlWhere, indexedColumns, INDEXED_COLUMNS } from '@/lib/sqlWhere';
 
 const DB_NAME = 'app_budget_local';
 const STORE_KEY = 'app_budget_local_store_v1';
@@ -174,13 +176,54 @@ function parseRow(row) {
   };
 }
 
+const INDEXED_TABLE = 'transactions';
+
+/**
+ * Colonne da scrivere per un record oltre a id e date: `data_json` e, per le
+ * transazioni, le colonne indicizzate (che vanno tenute allineate a data_json).
+ */
+function rowValues(table, item, withIndexes = true) {
+  const columns = ['data_json'];
+  const values = [JSON.stringify(item)];
+
+  if (table === INDEXED_TABLE && withIndexes) {
+    columns.push(...INDEXED_COLUMNS);
+    values.push(...indexedColumns(item));
+  }
+
+  return { columns, values };
+}
+
+/** `UPDATE ... SET` per un record: "data_json = ?, date = ?, ..." più i valori. */
+function rowSet(table, item, withIndexes = true) {
+  const { columns, values } = rowValues(table, item, withIndexes);
+
+  return {
+    set: columns.map((column) => `${column} = ?`).join(', '),
+    values,
+  };
+}
+
+async function insertRow(db, table, item, transaction = true) {
+  const { columns, values } = rowValues(table, item);
+  const all = ['id', ...columns, 'created_date', 'updated_date'];
+
+  await db.run(
+    `INSERT INTO ${table} (${all.join(', ')})
+     VALUES (${all.map(() => '?').join(', ')})`,
+    [item.id, ...values, item.created_date, item.updated_date],
+    transaction
+  );
+}
+
 /**
  * Porta il database SQLite alla versione corrente, una migrazione alla volta,
  * tutto in un'unica transazione. La versione sta in `PRAGMA user_version`
  * (0 = database creato prima del versioning, cioè versione 1).
  * Usa `db` direttamente: qui getSqliteDb() non ha ancora finito.
+ * Esportata solo per i test.
  */
-async function migrateSqlite(db) {
+export async function migrateSqlite(db) {
   const res = await db.query('PRAGMA user_version');
   let version = readVersion(res.values?.[0]?.user_version);
   const pending = pendingMigrations(version);
@@ -211,13 +254,28 @@ async function migrateSqlite(db) {
           for (const item of result.data[entityName]) {
             if (!result.changedIds[entityName].has(item.id)) continue;
 
-            // Solo data_json: è un aggiornamento dei dati, non una modifica dell'utente.
+            // Niente updated_date: è un aggiornamento dei dati, non una modifica dell'utente.
+            const { set, values } = rowSet(table, item, version >= INDEXES_VERSION);
             await db.run(
-              `UPDATE ${table} SET data_json = ? WHERE id = ?`,
-              [JSON.stringify(item), item.id],
+              `UPDATE ${table} SET ${set} WHERE id = ?`,
+              [...values, item.id],
               false
             );
           }
+        }
+      }
+
+      if (migration.backfillIndexes) {
+        const rows = await db.query(`SELECT id, data_json FROM ${INDEXED_TABLE}`);
+
+        for (const row of rows.values || []) {
+          await db.run(
+            `UPDATE ${INDEXED_TABLE}
+             SET ${INDEXED_COLUMNS.map((column) => `${column} = ?`).join(', ')}
+             WHERE id = ?`,
+            [...indexedColumns(JSON.parse(row.data_json)), row.id],
+            false
+          );
         }
       }
 
@@ -308,7 +366,12 @@ function dateColumns(item) {
   };
 }
 
-async function readAll(entityName) {
+/**
+ * Legge tutti i record di un'entità. Con `query`, su SQLite le transazioni
+ * vengono pre-filtrate sulle colonne indicizzate: chi chiama applica comunque
+ * l'intera query con `matches()`.
+ */
+async function readAll(entityName, query) {
   const table = TABLES[entityName];
 
   if (!table) {
@@ -318,8 +381,12 @@ async function readAll(entityName) {
   const db = await getSqliteDb();
 
   if (db) {
+    const { where, params } =
+      query && table === INDEXED_TABLE ? buildSqlWhere(query) : { where: '', params: [] };
+
     const result = await db.query(
-      `SELECT data_json, created_date, updated_date FROM ${table}`
+      `SELECT data_json, created_date, updated_date FROM ${table} ${where}`,
+      params
     );
 
     return (result.values || []).map(parseRow);
@@ -465,17 +532,7 @@ async function replaceAllData(data) {
       );
 
       for (const item of data[entityName] ?? []) {
-        await db.run(
-          `INSERT INTO ${table} (id, data_json, created_date, updated_date)
-           VALUES (?, ?, ?, ?)`,
-          [
-            item.id,
-            JSON.stringify(item),
-            item.created_date,
-            item.updated_date,
-          ],
-          false
-        );
+        await insertRow(db, table, item, false);
       }
     }
 
@@ -496,7 +553,7 @@ function buildEntity(entityName) {
 
   return {
     async filter(query = {}, options = {}) {
-      let items = (await readAll(entityName)).filter(
+      let items = (await readAll(entityName, query)).filter(
         (item) => matches(item, query)
       );
 
@@ -542,17 +599,7 @@ function buildEntity(entityName) {
 
         if (db) {
           // SQLite: insert only the new record.
-          await db.run(
-            `INSERT INTO ${table}
-             (id, data_json, created_date, updated_date)
-             VALUES (?, ?, ?, ?)`,
-            [
-              item.id,
-              JSON.stringify(item),
-              item.created_date,
-              item.updated_date,
-            ]
-          );
+          await insertRow(db, table, item);
         } else {
           // Browser preview.
           const items = await readAll(entityName);
@@ -591,15 +638,12 @@ function buildEntity(entityName) {
             updated_date: new Date().toISOString(),
           };
 
+          const { set, values } = rowSet(table, updatedItem);
           const result = await db.run(
             `UPDATE ${table}
-             SET data_json = ?, updated_date = ?
+             SET ${set}, updated_date = ?
              WHERE id = ?`,
-            [
-              JSON.stringify(updatedItem),
-              updatedItem.updated_date,
-              id,
-            ]
+            [...values, updatedItem.updated_date, id]
           );
 
           if (result.changes?.changes === 0) {
@@ -674,7 +718,7 @@ function buildEntity(entityName) {
       dateBucket,
       sum = [],
     } = {}) {
-      const filtered = (await readAll(entityName)).filter(
+      const filtered = (await readAll(entityName, query)).filter(
         (item) => matches(item, query)
       );
 
@@ -786,7 +830,7 @@ function uncategorize(transaction, now) {
 export async function deleteCategoryCascade(categoryId) {
   const result = await serializeWrite(async () => {
     const now = new Date().toISOString();
-    const affectedTransactions = (await readAll('Transaction')).filter(
+    const affectedTransactions = (await readAll('Transaction', { category_id: categoryId })).filter(
       (t) => t.category_id === categoryId
     );
     const affectedBudgets = (await readAll('Budget')).filter(
@@ -804,10 +848,11 @@ export async function deleteCategoryCascade(categoryId) {
       try {
         for (const transaction of affectedTransactions) {
           const updated = uncategorize(transaction, now);
+          const { set, values } = rowSet('transactions', updated);
 
           await db.run(
-            `UPDATE transactions SET data_json = ?, updated_date = ? WHERE id = ?`,
-            [JSON.stringify(updated), now, transaction.id],
+            `UPDATE transactions SET ${set}, updated_date = ? WHERE id = ?`,
+            [...values, now, transaction.id],
             false
           );
         }
