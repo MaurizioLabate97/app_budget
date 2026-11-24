@@ -7,6 +7,7 @@
  * is reserved for backup restoration and is protected by a SQLite transaction.
  */
 import { Capacitor } from '@capacitor/core';
+import { matches } from '@/lib/query';
 
 const DB_NAME = 'app_budget_local';
 const STORE_KEY = 'app_budget_local_store_v1';
@@ -244,48 +245,6 @@ async function persistBrowser(entityName, items) {
     STORE_KEY,
     JSON.stringify(store)
   );
-}
-
-function matches(item, query = {}) {
-  return Object.entries(query).every(([key, expected]) => {
-    const actual = item[key];
-
-    if (
-      expected &&
-      typeof expected === 'object' &&
-      !Array.isArray(expected)
-    ) {
-      return Object.entries(expected).every(([op, value]) => {
-        if (op === '$gte') return actual >= value;
-        if (op === '$gt') return actual > value;
-        if (op === '$lte') return actual <= value;
-        if (op === '$lt') return actual < value;
-        if (op === '$ne') return actual !== value;
-
-        if (op === '$in') {
-          return Array.isArray(value) && value.includes(actual);
-        }
-
-        if (op === '$regex') {
-          try {
-            const flags = expected.$options?.includes('i') ? 'i' : '';
-
-            return new RegExp(value, flags).test(
-              String(actual ?? '')
-            );
-          } catch {
-            return false;
-          }
-        }
-
-        if (op === '$options') return true;
-
-        return false;
-      });
-    }
-
-    return actual === expected;
-  });
 }
 
 function compareValues(a, b) {

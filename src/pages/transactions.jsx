@@ -17,8 +17,10 @@ import AddTransactionDialog from "@/components/transactions/addtransactiondialog
 import { MONTH_NAMES } from "@/lib/format";
 import { getMonthRange } from "@/lib/date";
 import { cn } from "@/lib/utils";
+import { buildSearchQuery } from "@/lib/search";
 
 const PAGE_SIZE = 50;
+const SEARCH_DELAY = 500;
 
 export default function Transactions() {
   const { toast } = useToast();
@@ -43,14 +45,13 @@ export default function Transactions() {
   const sentinel = useRef(null);
 
   const query = useMemo(() => {
-    const q = {};
+    const q = buildSearchQuery(appliedSearch);
     if (typeFilter !== "all") q.type = typeFilter;
     if (monthFilter !== "all") {
       const [y, m] = monthFilter.split("-").map(Number);
       const { start, end } = getMonthRange(y, m);
       q.date = { $gte: start, $lt: end };
     }
-    if (appliedSearch) q.description = { $regex: appliedSearch, $options: "i" };
     return q;
   }, [typeFilter, monthFilter, appliedSearch]);
 
@@ -116,6 +117,12 @@ export default function Transactions() {
       setLoadingMore(false);
     }
   }, [query, total, showError]);
+
+  // La ricerca parte da sola poco dopo l'ultima battuta.
+  useEffect(() => {
+    const timer = setTimeout(() => setAppliedSearch(search.trim()), SEARCH_DELAY);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Nuovo filtro o nuova ricerca: si riparte dal primo blocco.
   useEffect(() => {
@@ -207,7 +214,7 @@ export default function Transactions() {
             // Svuotando il campo la ricerca si toglie subito.
             if (!e.target.value.trim()) setAppliedSearch("");
           }}
-          placeholder="Cerca... (premi Invio)"
+          placeholder="Cerca esercente, descrizione o categoria"
           className="pl-9"
           onKeyDown={(e) => e.key === "Enter" && setAppliedSearch(search.trim())}
         />
