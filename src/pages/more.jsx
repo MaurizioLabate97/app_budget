@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Repeat, Tags, Landmark, ChevronRight, Download, Upload, ShieldCheck } from 'lucide-react';
+import { BarChart3, Repeat, Tags, Landmark, ChevronRight, Download, Upload, ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -16,6 +16,7 @@ export default function More() {
   const [busy, setBusy] = useState(false);
   const [pendingFile, setPendingFile] = useState(null);
   const items = [
+    { to: '/stats', icon: BarChart3, label: 'Statistiche', desc: 'Dove spendi di più' },
     { to: '/recurring', icon: Repeat, label: 'Spese ricorrenti', desc: 'Affitto, abbonamenti e altre spese fisse' },
     { to: '/categories', icon: Tags, label: 'Categorie', desc: 'Gestisci le tue categorie' },
     { to: '/bank', icon: Landmark, label: 'Conti bancari', desc: 'Collegamento automatico disattivato in modalità locale' },

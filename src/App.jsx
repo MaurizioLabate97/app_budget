@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClientInstance } from '@/lib/query-client';
@@ -13,6 +14,15 @@ import More from './pages/more';
 import Recurring from './pages/recurring';
 import PageNotFound from './lib/pagenotfound';
 
+// Le statistiche si caricano solo quando servono: recharts e i calcoli restano fuori dal bundle iniziale.
+const Stats = lazy(() => import('./pages/stats'));
+
+const pageSpinner = (
+  <div className="flex justify-center py-12">
+    <div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" />
+  </div>
+);
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClientInstance}>
@@ -27,6 +37,7 @@ export default function App() {
             <Route path="/bank" element={<BankAccounts />} />
             <Route path="/more" element={<More />} />
             <Route path="/recurring" element={<Recurring />} />
+            <Route path="/stats" element={<Suspense fallback={pageSpinner}><Stats /></Suspense>} />
             <Route path="*" element={<PageNotFound />} />
           </Route>
         </Routes>

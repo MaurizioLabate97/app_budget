@@ -266,6 +266,10 @@ export default function Dashboard() {
           data={d.breakdown}
           total={d.expense}
         />
+
+        <Link to="/stats" className="mt-2 block text-right text-xs font-medium text-primary">
+          Vedi statistiche ›
+        </Link>
       </Card>
 
       {/* Ultimi 5 movimenti del mese */}

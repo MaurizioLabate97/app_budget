@@ -33,7 +33,7 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 - **Date:** le date sono stringhe `YYYY-MM-DD` locali. Usa sempre gli helper di `src/lib/date.js` (`todayLocal`, `toLocalDateString`, `getMonthRange`). **Mai `toISOString()` per ricavare un giorno**: in Italia (UTC+1/+2) restituisce il giorno sbagliato.
 - **Importi:** i campi sono `type="text" inputMode="decimal"`, il parsing passa da `parseAmount()` e la visualizzazione in modifica da `formatAmountInput()` (`src/lib/format.js`). `formatCurrency()` usa `it-IT` (es. `1.234,50 €`).
 - **Eliminazioni:** chiedono sempre conferma con `src/components/ConfirmDialog.jsx`, non con `window.confirm`.
-- Pagine in `src/pages/`: dashboard, transactions (in UI "Movimenti"), budgets, categories, more (backup/restore), bankaccount (placeholder).
+- Pagine in `src/pages/`: dashboard, stats, transactions (in UI "Movimenti"), budgets, categories, more (backup/restore), bankaccount (placeholder).
 
 ## Stato (aggiornato al 19/11/2026)
 
@@ -47,6 +47,7 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
 - `package.json` ripulito: da 67 a 22 dipendenze, tolta anche `nitro`. Config di ESLint e jsconfig corrette.
 - Budget ricorrenti (20/11/2026): ogni mese si ripropongono le voci "Ogni mese" dell'ultimo mese con budget (`src/lib/budgets.js` + `budgetActions.js`, testati); voci "Solo questo mese" (`Budget.recurring: false`); pagina Budget "tocca e regola" con − / + (passo 10 €) e importo scrivibile a mano; pannello "Nuova voce" (crea la categoria se non c'è, blocca i doppioni per categoria e mese); popup al primo avvio con Mutuo, Alcol e Spesa. I mesi già preparati sono segnati in localStorage (`app_budget_budget_months_v1`, azzerato dopo un restore). Design in `docs/superpowers/specs/2026-11-20-budget-ricorrenti-design.md`.
 - Spese ricorrenti (19/11/2026): entità `RecurringTransaction`, scadenze calcolate da `src/lib/recurring.js` (testato con Vitest, `npm test`), riquadro "Da confermare" in Dashboard (Conferma / Salta), pagina Altro → Spese ricorrenti (`/recurring`). Design in `docs/superpowers/specs/2026-11-19-spese-ricorrenti-design.md`.
+- Statistiche (24/11/2026): pagina `/stats` (da Altro e da Home) con la classifica delle categorie di spesa non fisse su 3/6/12 mesi, media al mese, confronto col periodo prima e dettaglio mese per mese. Calcoli puri in `src/lib/stats.js` (testati). Flag facoltativo `Category.fixed` ("Spesa fissa" nel dialog della categoria); se manca vale la regola sul nome (mutuo, affitto, bollette, luce, gas, acqua, condominio). Design in `docs/superpowers/specs/2026-11-24-statistiche-design.md`.
 - Pulizia fase 2 (19/11/2026): rimossi componenti, hooks e utils inutilizzati e i componenti shadcn non usati. In `src/components/ui/` restano solo alert-dialog, button, card, dialog, drawer, input, label, popover, select, toast, toaster e use-toast. Il lint passa senza errori né warning.
 
 **Note:**
@@ -60,7 +61,7 @@ Obiettivo: tracciare in modo semplice le spese, che siano giornaliere, periodich
   2. ~~Budget ricorrenti~~ (fatto).
   3. ~~Categorie di default al primo avvio~~ (fatto con il popup dei budget).
   4. ~~Paginazione dei movimenti~~ (fatto: scroll infinito a blocchi di 50).
-  5. Statistiche e grafici di trend.
+  5. ~~Statistiche e grafici di trend~~ (fatto: pagina Statistiche "dove spendi di più").
   6. Ricerca anche sull'esercente.
   7. Riga transazione meno affollata su mobile.
 - **Fase 4, data layer:** passare a React Query (già installato ma inutilizzato) al posto degli eventi window; colonne indicizzate (`date`, `type`, `category_id`); versioning dello schema con migrazioni.
